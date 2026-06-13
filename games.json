@@ -3,6 +3,16 @@
   "title": "Puzzle",
   "games": [
     {
+      "slug": "tetris",
+      "title": "Tetris",
+      "path": "games/tetris/",
+      "icon": "🟪",
+      "dims": "2D",
+      "tags": ["swipe", "blocks"],
+      "license": "MIT",
+      "credit": "Gamf · classic Tetris design"
+    },
+    {
       "slug": "sample-2048",
       "title": "2048",
       "path": "games/sample-2048/",
