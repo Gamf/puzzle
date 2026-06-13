@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#07080c">
+  <title>Lights Out — Gamf</title>
+  <meta name="description" content="Switch off every light. Tapping a cell flips it and its neighbours — a glowing, touch-first take on the classic Lights Out puzzle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: #ffcd4d; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
+    canvas { border-radius: var(--r-lg); touch-action: none; display: block;
+      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.04); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-surface-2)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Lvl <b id="level">1</b></span>
+    <span class="gx-pill">Moves <b id="moves">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> Tap a light</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> Arrows · Space</span>
+    <span class="gx-hint__chip as-btn" id="hintBtn"><svg class="gx-ico"><use href="#i-target"/></svg> Hint (H)</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> New (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Lights Out!</h2>
+      <div class="gx-modal__row">Level <b id="finalLevel">1</b></div>
+      <div class="gx-modal__row">Moves <b id="finalMoves">0</b></div>
+      <div class="gx-modal__row">Best (fewest) <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-lights-out-best';   // fewest total moves to clear a board (lower = better)
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const levelEl = document.getElementById('level');
+    const movesEl = document.getElementById('moves');
+    const bestEl  = document.getElementById('best');
+    const overEl  = document.getElementById('over');
+    const overTitleEl = document.getElementById('overTitle');
+    const finalLevelEl = document.getElementById('finalLevel');
+    const finalMovesEl = document.getElementById('finalMoves');
+    const finalBestEl  = document.getElementById('finalBest');
+    const newBestEl = document.getElementById('newBest');
+    const againLabelEl = document.getElementById('againLabel');
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x11ce0501;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ---- state ----
+    let N = 3;                 // grid size for current level
+    let grid;                  // Uint8Array length N*N, 1 = lit
+    let level, moves, best, won, paused;
+    let cursor = 0;            // keyboard cursor index
+    let cells;                 // per-cell render state {glow, flip}
+    let parts = [];            // particle bursts
+    let hintIdx = -1;          // currently suggested cell (from solver), -1 none
+    let rafPending = false, lastNow = 0;
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    // ---- layout ----
+    let size = 400, cell = 90, pad = 18, dpr = 1;
+    function fit(){
+      size = Math.max(220, Math.min(innerWidth * 0.92, 460, innerHeight - 210));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = size * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pad = size * 0.045; cell = (size - pad * 2) / N;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    function cellXY(i){ const x = i % N, y = (i / N) | 0; return [pad + x * cell, pad + y * cell]; }
+
+    // ---- puzzle generation: start solved, apply random "presses" so it's
+    //      always solvable. The press-set both scrambles and proves solvability. ----
+    function neighbors(i){
+      const x = i % N, y = (i / N) | 0, out = [i];
+      if(x > 0) out.push(i - 1);
+      if(x < N - 1) out.push(i + 1);
+      if(y > 0) out.push(i - N);
+      if(y < N - 1) out.push(i + N);
+      return out;
+    }
+    function applyPress(g, i){ for(const j of neighbors(i)) g[j] ^= 1; }
+
+    function newBoard(){
+      grid = new Uint8Array(N * N);
+      // number of scramble presses scales with level for difficulty
+      const presses = Math.min(3 + level, N * N);
+      const used = new Set();
+      let safety = 0;
+      while(used.size < presses && safety++ < 500){
+        const i = randInt(N * N);
+        if(used.has(i)) continue;
+        used.add(i);
+        applyPress(grid, i);
+      }
+      // guarantee at least one light is on (avoid an already-solved board)
+      if(!grid.some(v => v)) applyPress(grid, randInt(N * N));
+      cells = Array.from({length: N * N}, () => ({ glow: grid[0] ? 1 : 0, flip: 0 }));
+      for(let i = 0; i < N * N; i++) cells[i].glow = grid[i];
+      hintIdx = -1;
+    }
+
+    // ---- GF(2) solver: find a minimal-ish press set that clears the board.
+    //      Gaussian elimination on the N*N x N*N toggle matrix over GF(2). ----
+    function solve(){
+      const n = N * N;
+      // build augmented matrix rows as bitfields (n+1 columns; last = target = current grid)
+      const rows = [];
+      for(let i = 0; i < n; i++){
+        const r = new Uint8Array(n + 1);
+        for(const j of neighbors(i)) r[j] = 1;   // pressing j affects light i
+        r[n] = grid[i];
+        rows.push(r);
+      }
+      // forward elimination
+      let pivotRow = 0;
+      const where = new Int32Array(n).fill(-1);
+      for(let col = 0; col < n && pivotRow < n; col++){
+        let sel = -1;
+        for(let r = pivotRow; r < n; r++){ if(rows[r][col]){ sel = r; break; } }
+        if(sel === -1) continue;
+        [rows[pivotRow], rows[sel]] = [rows[sel], rows[pivotRow]];
+        where[col] = pivotRow;
+        for(let r = 0; r < n; r++){
+          if(r !== pivotRow && rows[r][col]){
+            for(let c = col; c <= n; c++) rows[r][c] ^= rows[pivotRow][c];
+          }
+        }
+        pivotRow++;
+      }
+      // back-substitute -> a particular solution (free vars = 0)
+      const x = new Uint8Array(n);
+      for(let col = 0; col < n; col++){
+        if(where[col] !== -1) x[col] = rows[where[col]][n];
+      }
+      const presses = [];
+      for(let i = 0; i < n; i++) if(x[i]) presses.push(i);
+      return presses;
+    }
+
+    function showHint(){
+      if(paused || won) return;
+      const sol = solve();
+      hintIdx = sol.length ? sol[0] : -1;
+      requestFrame();
+    }
+
+    // ---- core action: press a cell ----
+    function press(i){
+      if(paused || won || i < 0 || i >= N * N) return;
+      applyPress(grid, i);
+      moves++;
+      movesEl.textContent = moves;
+      // animate every affected cell
+      for(const j of neighbors(i)){
+        cells[j].flip = 1;                 // 1 -> 0 over time
+        burst(j, grid[j]);
+      }
+      hintIdx = -1;
+      requestFrame();
+      if(!grid.some(v => v)) win();
+    }
+
+    function burst(i, lit){
+      const [px, py] = cellXY(i);
+      const cx = px + cell / 2, cy = py + cell / 2;
+      const col = lit ? '#ffe08a' : '#46d6a4';
+      const count = 9;
+      for(let k = 0; k < count; k++){
+        const a = (k / count) * Math.PI * 2 + rand() * 0.6;
+        const s = 1.3 + rand() * 2.6;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, c: col });
+      }
+    }
+
+    // ---- win / progress ----
+    function win(){
+      won = true;
+      // big celebratory burst
+      for(let i = 0; i < N * N; i++) burst(i, 0);
+      // best = fewest moves to clear ANY board (lower is better)
+      let isBest = false;
+      if(best === 0 || moves < best){ best = moves; localStorage.setItem(BEST_KEY, best); isBest = true; }
+      bestEl.textContent = best > 0 ? best : '—';
+      overTitleEl.textContent = 'Lights Out!';
+      againLabelEl.textContent = 'Next level';
+      finalLevelEl.textContent = level;
+      finalMovesEl.textContent = moves;
+      finalBestEl.textContent = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best — fewest moves!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 480);
+    }
+
+    function nextLevel(){
+      level++;
+      // grow the grid every few levels, cap at 6x6
+      N = Math.min(3 + Math.floor((level - 1) / 2), 6);
+      startLevel();
+    }
+
+    function startLevel(){
+      moves = 0; won = false; paused = false;
+      levelEl.textContent = level;
+      movesEl.textContent = moves;
+      cursor = 0;
+      parts = [];
+      overEl.classList.remove('gx-show');
+      fit();
+      newBoard();
+      requestFrame();
+    }
+
+    function reset(){
+      // R: regenerate the current level fresh
+      startLevel();
+    }
+
+    function fullReset(){
+      level = 1; N = 3; startLevel();
+    }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+      // ease glow toward target (grid state) and decay flip pulse
+      for(let i = 0; i < N * N; i++){
+        const c = cells[i];
+        const target = grid[i];
+        const d = target - c.glow;
+        if(Math.abs(d) > 0.002){ c.glow += d * Math.min(1, dt * 14); active = true; }
+        else c.glow = target;
+        if(c.flip > 0){ c.flip = Math.max(0, c.flip - dt * 3.2); active = true; }
+      }
+      // particles
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 2.2; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+      render();
+      if(active) requestFrame();
+    }
+
+    // ---- rendering ----
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+
+    function drawCell(i){
+      const [px, py] = cellXY(i);
+      const m = cell * 0.07;
+      const x = px + m, y = py + m, w = cell - m * 2, h = cell - m * 2, r = cell * 0.18;
+      const g = cells[i].glow;                 // 0..1 lit amount
+      const flip = cells[i].flip;
+      const sc = 1 - flip * 0.12;              // squash pulse on change
+      const cw = w * sc, ch = h * sc, cx = x + (w - cw) / 2, cy = y + (h - ch) / 2;
+
+      // base socket
+      ctx.fillStyle = '#0e1019';
+      roundRect(x - 1, y - 1, w + 2, h + 2, r + 1); ctx.fill();
+
+      // body gradient: dark when off, warm/glowing when on
+      const grad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
+      const onTop = `rgba(${255},${214 + 0},${90},1)`;
+      const offTop = '#1b2030', offBot = '#12151f';
+      grad.addColorStop(0, lerpHex(offTop, onTop, g));
+      grad.addColorStop(1, lerpHex(offBot, '#e0982b', g));
+      ctx.save();
+      if(g > 0.02){ ctx.shadowColor = 'rgba(255,205,77,' + (0.55 * g) + ')'; ctx.shadowBlur = 18 * g; }
+      ctx.fillStyle = grad;
+      roundRect(cx, cy, cw, ch, r); ctx.fill();
+      ctx.restore();
+
+      // inner gloss highlight
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.10 + 0.16 * g) + ')';
+      roundRect(cx + cw * 0.12, cy + ch * 0.10, cw * 0.76, ch * 0.30, r * 0.7); ctx.fill();
+
+      // lit core ring
+      if(g > 0.5){
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.25 * (g - 0.5) * 2) + ')';
+        ctx.lineWidth = Math.max(1, cell * 0.02);
+        roundRect(cx + cw * 0.22, cy + ch * 0.22, cw * 0.56, ch * 0.56, r * 0.6); ctx.stroke();
+      }
+
+      // hint marker
+      if(i === hintIdx){
+        ctx.strokeStyle = '#36e0c2';
+        ctx.lineWidth = Math.max(2, cell * 0.04);
+        ctx.setLineDash([cell * 0.12, cell * 0.08]);
+        roundRect(cx - 2, cy - 2, cw + 4, ch + 4, r + 2); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // keyboard cursor
+      if(i === cursor){
+        ctx.strokeStyle = 'rgba(255,255,255,.85)';
+        ctx.lineWidth = Math.max(2, cell * 0.035);
+        roundRect(cx + 3, cy + 3, cw - 6, ch - 6, r * 0.7); ctx.stroke();
+      }
+    }
+
+    function lerpHex(a, b, t){
+      const pa = hexToRgb(a), pb = hexToRgb(b);
+      const r = Math.round(pa[0] + (pb[0] - pa[0]) * t);
+      const g = Math.round(pa[1] + (pb[1] - pa[1]) * t);
+      const bl = Math.round(pa[2] + (pb[2] - pa[2]) * t);
+      return `rgb(${r},${g},${bl})`;
+    }
+    function hexToRgb(h){
+      if(h[0] === 'r'){ const m = h.match(/\d+/g); return [+m[0], +m[1], +m[2]]; }
+      h = h.replace('#', '');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+
+    function render(){
+      // board background
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, '#161a26'); bg.addColorStop(1, '#0e1018');
+      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+
+      for(let i = 0; i < N * N; i++) drawCell(i);
+
+      // particles
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+      // pause veil
+      if(paused){
+        ctx.fillStyle = 'rgba(7,8,12,.7)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+        ctx.fillStyle = '#eef1f7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '700 ' + Math.floor(size * 0.1) + 'px ' + getComputedStyle(document.body).getPropertyValue('--gx-font-display');
+        ctx.fillText('Paused', size / 2, size / 2);
+      }
+    }
+
+    function togglePause(){
+      if(won) return;
+      paused = !paused;
+      requestFrame();
+    }
+
+    // ---- input: tap / click ----
+    onTap(canvas, (clientX, clientY) => {
+      if(paused || won) return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      const x = Math.floor((lx - pad) / cell), y = Math.floor((ly - pad) / cell);
+      if(x < 0 || x >= N || y < 0 || y >= N) return;
+      cursor = y * N + x;
+      press(cursor);
+    });
+
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('hintBtn').onclick = showHint;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => {
+      if(won) nextLevel();
+      else { overEl.classList.remove('gx-show'); }
+    };
+
+    // ---- keyboard ----
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor(-1, 0); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor(1, 0); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor(0, -1); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); moveCursor(0, 1); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(won) nextLevel();
+        else if(!paused) press(cursor);
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+      else if(k === 'h' || k === 'H'){ e.preventDefault(); showHint(); }
+    });
+
+    function moveCursor(dx, dy){
+      if(paused || won) return;
+      let x = cursor % N, y = (cursor / N) | 0;
+      x = Math.max(0, Math.min(N - 1, x + dx));
+      y = Math.max(0, Math.min(N - 1, y + dy));
+      cursor = y * N + x;
+      requestFrame();
+    }
+
+    // ---- boot ----
+    fullReset();
+  </script>
+</body>
+</html>

@@ -32,6 +32,17 @@
       "tags": ["swipe", "blocks"],
       "license": "MIT",
       "credit": "Gamf · classic Tetris design"
+    },
+    {
+      "slug": "lights-out",
+      "title": "Lights Out",
+      "path": "games/lights-out/",
+      "icon": "💡",
+      "color": "#ffcd4d",
+      "dims": "2D",
+      "tags": ["tap", "logic", "toggle"],
+      "license": "MIT",
+      "credit": "Gamf original"
     }
   ]
 }
