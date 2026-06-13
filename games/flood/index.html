@@ -52,6 +52,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Moves <b id="moves">0</b><span id="movesCap" style="color:var(--gx-text-3)">/25</span></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage">
@@ -80,6 +81,23 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New board</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">HOW TO PLAY</div>
+      <p class="gx-help__obj">Flood the entire board with a single color in the fewest moves, spreading from the top-left corner.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap a color</b><span>Flood with it</span></li>
+        <li><b>← / →</b><span>Pick color</span></li>
+        <li><b>1 – 6</b><span>Flood with that color</span></li>
+        <li><b>Space</b><span>Flood with selected</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -311,6 +329,11 @@
       waveT += dt;
       let active = false;
 
+      if(!cells){ render(); return; }          // guard: board not built yet
+
+      // while paused, freeze the simulation but keep the (veiled) board painted
+      if(paused){ render(); return; }
+
       // advance per-cell flood progress; wave is staggered by BFS distance
       const speed = 4.2;          // progress units / sec
       const waveStep = 0.045;     // seconds of delay per ring of distance
@@ -384,6 +407,9 @@
     }
 
     function render(){
+      if(!cells) return;                       // guard: nothing to draw before the first board exists
+      // clear the full canvas each frame so the rounded-panel corners never ghost
+      ctx.clearRect(0, 0, size, size);
       // board background panel
       const bg = ctx.createLinearGradient(0, 0, 0, size);
       bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#100c09');
@@ -463,9 +489,34 @@
       requestFrame();
     }
 
+    // ---- how-to-play overlay ----
+    const helpEl       = document.getElementById('gxHelp');
+    const helpOpenEl   = document.getElementById('gxHelpOpen');
+    const helpCloseEl  = document.getElementById('gxHelpClose');
+    const HELP_SEEN_KEY = 'gamf-seen-puzzle-flood';
+    let pausedByHelp = false;
+
+    function openHelp(){
+      helpEl.classList.add('gx-show');
+      if(!done && !paused){ paused = true; pausedByHelp = true; requestFrame(); }
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if(pausedByHelp){ paused = false; pausedByHelp = false; requestFrame(); }
+    }
+    helpOpenEl.addEventListener('click', openHelp);
+    helpCloseEl.addEventListener('click', closeHelp);
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
     // ---- boot ----
     buildSwatches();
     startGame();
+
+    // first-visit auto-show (after startGame so paused/requestFrame are valid)
+    if(!localStorage.getItem(HELP_SEEN_KEY)){
+      openHelp();
+      localStorage.setItem(HELP_SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

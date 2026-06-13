@@ -36,6 +36,7 @@
     <span class="gx-pill">Time <b id="time">0:00</b></span>
     <span class="gx-pill">Left <b id="left">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -60,6 +61,23 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New puzzle</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to play</div>
+      <p class="gx-help__obj">Fill every empty cell so each row, column and 2×3 box contains the numbers 1 to 6 with no repeats — conflicts light up red.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Arrows</b><span>Select a cell</span></li>
+        <li><b>Tap pad / 1–6</b><span>Place a number</span></li>
+        <li><b>Erase / 0</b><span>Clear a cell</span></li>
+        <li><b>Space</b><span>Next empty cell</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>New puzzle</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -126,7 +144,10 @@
       size = board;
       gpad = size * 0.04;
       cell = (size - gpad * 2) / N;
-      padN = cell * 0.92;                     // number-pad button size
+      // number-pad: 7 buttons (1..6 + erase) must fit the board width with gaps.
+      // Solve padN so that n*padN + (n-1)*gap == inner width, with gap = padN*0.16.
+      const pn = N + 1, gapFrac = 0.16, innerW = size - gpad * 2;
+      padN = innerW / (pn + (pn - 1) * gapFrac);
       const padH = padN + size * 0.06;
       const totalH = size + padH;
 
@@ -144,7 +165,7 @@
     // ---- pad button geometry (6 buttons + erase) ----
     function padRects(){
       const n = N + 1;                        // 1..6 plus erase
-      const gap = (size - gpad * 2 - padN * n) / (n - 1);
+      const gap = Math.max(0, (size - gpad * 2 - padN * n) / (n - 1));
       const rects = [];
       for(let k = 0; k < n; k++){
         const x = gpad + k * (padN + gap);
@@ -526,6 +547,11 @@
     // ---- keyboard ----
     addEventListener('keydown', e => {
       const k = e.key;
+      // While the how-to-play overlay is open, swallow game keys; Esc/Space/Enter dismiss it.
+      if(document.getElementById('gxHelp').classList.contains('gx-show')){
+        if(k === 'Escape' || k === ' ' || k === 'Enter'){ e.preventDefault(); hideHelp(); }
+        return;
+      }
       if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor(-1, 0); }
       else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor(1, 0); }
       else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor(0, -1); }
@@ -557,8 +583,30 @@
       for(let s = 1; s <= N * N; s++){ const i = (cursor + s) % (N * N); if(!board[i]){ cursor = i; requestFrame(); return; } }
     }
 
+    // ---- how-to-play overlay ----
+    const helpEl = document.getElementById('gxHelp');
+    const SEEN_KEY = 'gamf-seen-puzzle-sudoku';
+    let pausedForHelp = false;
+    function showHelp(){
+      if(!won && !paused){ pausedForHelp = true; togglePause(); }  // pause game while reading
+      helpEl.classList.add('gx-show');
+    }
+    function hideHelp(){
+      helpEl.classList.remove('gx-show');
+      if(pausedForHelp && paused){ pausedForHelp = false; togglePause(); }  // resume
+      pausedForHelp = false;
+    }
+    document.getElementById('gxHelpOpen').onclick = showHelp;
+    document.getElementById('gxHelpClose').onclick = hideHelp;
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) hideHelp(); });
+
     // ---- boot ----
     startPuzzle(true);
+
+    if(!localStorage.getItem(SEEN_KEY)){
+      showHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

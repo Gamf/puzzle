@@ -40,6 +40,7 @@
     <span class="gx-pill">Lvl <b id="level">1</b></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -64,6 +65,22 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Rotate every pipe tile so an unbroken channel carries the flow from the amber source to the ringed drain.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap / Space</b><span>Rotate the tile 90°</span></li>
+        <li><b>Arrows / WASD</b><span>Move the cursor</span></li>
+        <li><b>Connect source → drain</b><span>Complete the level</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart level</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -504,6 +521,8 @@
     }
 
     function render(){
+      // clear full canvas (CSS px) so nothing lingers in the rounded corners
+      ctx.clearRect(0, 0, size, size);
       // board background (warm screen)
       const bg = ctx.createLinearGradient(0, 0, 0, size);
       bg.addColorStop(0, COL.screen); bg.addColorStop(1, COL.bg);
@@ -579,8 +598,29 @@
       requestFrame();
     }
 
+    // ============================================================ how-to-play overlay
+    const SEEN_KEY = 'gamf-seen-puzzle-pipes';
+    const helpEl = document.getElementById('gxHelp');
+    let pausedByHelp = false;
+    function openHelp(){
+      if(!won && !paused){ paused = true; pausedByHelp = true; requestFrame(); }
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if(pausedByHelp){ paused = false; pausedByHelp = false; requestFrame(); }
+    }
+    document.getElementById('gxHelpOpen').onclick = openHelp;
+    document.getElementById('gxHelpClose').onclick = closeHelp;
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
     // ============================================================ boot
     fullReset();
+
+    if(!localStorage.getItem(SEEN_KEY)){
+      helpEl.classList.add('gx-show');
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

@@ -34,6 +34,7 @@
     <span class="gx-pill">💣 <b id="mineCount">0</b></span>
     <span class="gx-pill">⏱ <b id="time">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="wrap">
@@ -46,14 +47,31 @@
 
   <div class="gx-hint">
     <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> Tap reveal · long-press flag</span>
-    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> Move · Space reveal · F flag · R restart</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> Move · Space reveal · F flag · P pause · R restart</span>
   </div>
 
   <div class="gx-modal" id="over"><div class="gx-modal__card"><h2 class="gx-modal__title" id="overTitle">Game Over</h2>
     <div class="gx-modal__row" id="overMsg">You hit a mine.</div>
     <div class="gx-modal__row">Time <b id="finalTime">0</b>s</div>
     <div class="gx-modal__row">Best <b id="finalBest">—</b></div>
+    <div class="gx-modal__new" id="overNew"></div>
     <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button></div></div>
+
+  <div class="gx-modal" id="gxHelp"><div class="gx-modal__card">
+    <div class="gx-modal__title">HOW TO PLAY</div>
+    <p class="gx-help__obj">Clear every safe square without detonating one of the hidden mines.</p>
+    <ul class="gx-help__list">
+      <li><b>Tap / Space</b><span>Reveal a square</span></li>
+      <li><b>Long-press / F</b><span>Plant or remove a flag</span></li>
+      <li><b>Flag button</b><span>Toggle tap-to-flag mode</span></li>
+      <li><b>Tap revealed / Enter</b><span>Chord (auto-clear)</span></li>
+      <li><b>Swipe / Arrows</b><span>Move the cursor</span></li>
+      <li><b>P</b><span>Pause / resume</span></li>
+      <li><b>R</b><span>Restart</span></li>
+    </ul>
+    <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
+  </div></div>
+
   <script type="module">
     import { onTap } from './touch.js';
     const COLS=9, ROWS=9, MINES=10;
@@ -62,7 +80,7 @@
     const NUMCOL=['','#6c8cff','#5ad1a8','#ff7a6c','#b06cff','#f2c14e','#5ad1e0','#e0e3ee','#9aa0b4'];
     let cell=36, dpr=1;
     let grid, revealed, flagged, mineMap, started, gameOver, win, firstClick, time, timer=null, parts=[];
-    let cursor={x:0,y:0}, flagMode=false;
+    let cursor={x:0,y:0}, flagMode=false, newBest=false, paused=false;
     let best=parseInt(localStorage.getItem(BEST_KEY)||'0',10)||0;
     document.getElementById('best').textContent=best?best+'s':'—';
     document.getElementById('mineCount').textContent=MINES;
@@ -81,7 +99,7 @@
       revealed=Array.from({length:ROWS},()=>Array(COLS).fill(false));
       flagged=Array.from({length:ROWS},()=>Array(COLS).fill(false));
       mineMap=Array.from({length:ROWS},()=>Array(COLS).fill(false));
-      started=false; gameOver=false; win=false; firstClick=true; time=0; parts=[];
+      started=false; gameOver=false; win=false; firstClick=true; time=0; parts=[]; newBest=false; paused=false;
       cursor={x:Math.floor(COLS/2),y:Math.floor(ROWS/2)};
       if(timer){clearInterval(timer);timer=null;}
       document.getElementById('time').textContent='0';
@@ -97,7 +115,11 @@
         let n=0; for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy;
           if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&mineMap[ny][nx]) n++; } grid[y][x]=n; } }
 
-    function startTimer(){ if(timer) return; timer=setInterval(()=>{ time++; document.getElementById('time').textContent=time; },1000); }
+    function startTimer(){ if(timer||paused) return; timer=setInterval(()=>{ time++; document.getElementById('time').textContent=time; },1000); }
+
+    function pauseGame(){ if(paused||gameOver) return; paused=true; if(timer){clearInterval(timer);timer=null;} }
+    function resumeGame(){ if(!paused) return; paused=false; if(started&&!gameOver) startTimer(); }
+    function togglePause(){ if(gameOver) return; if(paused) resumeGame(); else pauseGame(); }
 
     function flagsUsed(){ let n=0; for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(flagged[y][x]) n++; return n; }
     function updateMineCount(){ document.getElementById('mineCount').textContent=Math.max(0,MINES-flagsUsed()); }
@@ -107,12 +129,12 @@
         if(revealed[cy][cx]||flagged[cy][cx]) continue; revealed[cy][cx]=true;
         if(grid[cy][cx]===0){ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(dx||dy) stack.push([cx+dx,cy+dy]); } } } }
 
-    function reveal(x,y){ if(gameOver||revealed[y][x]||flagged[y][x]) return;
+    function reveal(x,y){ if(gameOver||paused||revealed[y][x]||flagged[y][x]) return;
       if(firstClick){ placeMines(x,y); firstClick=false; started=true; startTimer(); }
       if(mineMap[y][x]){ revealed[y][x]=true; burstMine(x,y); loseGame(); return; }
       flood(x,y); checkWin(); }
 
-    function toggleFlag(x,y){ if(gameOver||revealed[y][x]) return;
+    function toggleFlag(x,y){ if(gameOver||paused||revealed[y][x]) return;
       if(firstClick){ placeMines(x,y); firstClick=false; started=true; startTimer(); }
       flagged[y][x]=!flagged[y][x]; updateMineCount(); }
 
@@ -132,7 +154,7 @@
     function winGame(){ gameOver=true; win=true; if(timer){clearInterval(timer);timer=null;}
       for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ if(mineMap[y][x]){ flagged[y][x]=true; burstWin(x,y);} }
       updateMineCount();
-      if(!best||time<best){ best=time; localStorage.setItem(BEST_KEY,best); document.getElementById('best').textContent=best+'s'; }
+      if(!best||time<best){ best=time; newBest=true; localStorage.setItem(BEST_KEY,best); document.getElementById('best').textContent=best+'s'; }
       document.getElementById('newBtn').textContent='😎 New (R)';
       showOver(true); }
     function showOver(victory){
@@ -140,6 +162,7 @@
       document.getElementById('overMsg').textContent=victory?'You found all the mines.':'You hit a mine.';
       document.getElementById('finalTime').textContent=time;
       document.getElementById('finalBest').textContent=best?best+'s':'—';
+      document.getElementById('overNew').textContent=(victory&&newBest)?'★ New best!':'';
       document.getElementById('over').classList.add('gx-show'); }
 
     function burstMine(x,y){ for(let i=0;i<16;i++){ const a=rand()*Math.PI*2,s=1+rand()*4.5;
@@ -213,9 +236,21 @@
       else if(k===' '||k==='Enter'){e.preventDefault();
         if(revealed[cursor.y][cursor.x]) chord(cursor.x,cursor.y); else reveal(cursor.x,cursor.y); }
       else if(k==='f'||k==='F'){e.preventDefault();toggleFlag(cursor.x,cursor.y);}
+      else if(k==='p'||k==='P'){e.preventDefault();togglePause();}
       else if(k==='r'||k==='R'){e.preventDefault();reset();return;}
       else return;
       requestAnimationFrame(loop); });
+
+    // How-to-play overlay
+    const SEEN_KEY='gamf-seen-puzzle-minesweeper';
+    const gxHelp=document.getElementById('gxHelp');
+    let resumeAfterHelp=false;
+    function openHelp(){ resumeAfterHelp=!paused; pauseGame(); gxHelp.classList.add('gx-show'); }
+    function closeHelp(){ gxHelp.classList.remove('gx-show'); if(resumeAfterHelp) resumeGame(); resumeAfterHelp=false; }
+    document.getElementById('gxHelpOpen').onclick=openHelp;
+    document.getElementById('gxHelpClose').onclick=closeHelp;
+    gxHelp.addEventListener('click',e=>{ if(e.target===gxHelp) closeHelp(); });
+    if(!localStorage.getItem(SEEN_KEY)){ gxHelp.classList.add('gx-show'); localStorage.setItem(SEEN_KEY,'1'); }
 
     reset();
   </script>

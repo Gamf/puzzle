@@ -32,6 +32,7 @@
     <span class="gx-pill">Lv <b id="lvl">1</b></span>
     <span class="gx-pill">Score <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">0</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="wrap">
@@ -50,7 +51,22 @@
   <div class="gx-modal" id="over"><div class="gx-modal__card"><h2 class="gx-modal__title">Game Over</h2>
     <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
     <div class="gx-modal__row">Best <b id="finalBest">0</b></div>
+    <div class="gx-modal__new" id="newBest"></div>
     <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button></div></div>
+
+  <div class="gx-modal" id="gxHelp"><div class="gx-modal__card">
+    <div class="gx-modal__title">How to Play</div>
+    <p class="gx-help__obj">Stack falling tetrominoes to fill complete horizontal rows and clear them before the blocks reach the top.</p>
+    <ul class="gx-help__list">
+      <li><b>Swipe / Arrows</b><span>Move left &amp; right</span></li>
+      <li><b>Tap / Up</b><span>Rotate piece</span></li>
+      <li><b>Swipe down / Down</b><span>Soft drop</span></li>
+      <li><b>Space / Enter</b><span>Hard drop</span></li>
+      <li><b>P</b><span>Pause</span></li>
+      <li><b>R</b><span>Restart</span></li>
+    </ul>
+    <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
+  </div></div>
   <script type="module">
     import { onSwipe, onTap } from './touch.js';
     const COLS=10, ROWS=20;
@@ -79,7 +95,7 @@
     function reset(){ grid=Array.from({length:ROWS},()=>Array(COLS).fill(null));
       score=0; level=1; lines=0; dropMs=800; acc=0; gameOver=false; paused=false; parts=[];
       document.getElementById('score').textContent=0; document.getElementById('lvl').textContent=1;
-      document.getElementById('over').classList.remove('gx-show'); spawn(); fit(); last=0; requestAnimationFrame(loop); }
+      document.getElementById('over').classList.remove('gx-show'); spawn(); fit(); last=performance.now(); requestAnimationFrame(loop); }
 
     function newPiece(){ const k=KEYS[Math.floor(rnd()*KEYS.length)];
       return { k, m:SHAPES[k].map(r=>r.slice()), x:Math.floor(COLS/2)-1, y:0 }; }
@@ -146,9 +162,11 @@
         ctx.fillText('Paused',W/2,H/2); ctx.textAlign='left'; } }
 
     function end(){ gameOver=true;
-      if(score>best){ best=score; localStorage.setItem(BEST_KEY,best); document.getElementById('best').textContent=best; }
+      const isNew=score>best;
+      if(isNew){ best=score; localStorage.setItem(BEST_KEY,best); document.getElementById('best').textContent=best; }
       document.getElementById('finalScore').textContent=score;
       document.getElementById('finalBest').textContent=best;
+      document.getElementById('newBest').textContent=isNew?'New best!':'';
       document.getElementById('over').classList.add('gx-show'); }
 
     document.getElementById('left').onclick=()=>move(-1);
@@ -166,7 +184,18 @@
       else if(k===' '||k==='Enter'){e.preventDefault();hard();}
       else if(k==='p'||k==='P'){e.preventDefault();togglePause();}
       else if(k==='r'||k==='R'){e.preventDefault();reset();} });
+
+    const SEEN_KEY='gamf-seen-puzzle-tetris';
+    const helpEl=document.getElementById('gxHelp');
+    let helpWasPaused=false;
+    function showHelp(){ helpWasPaused=paused; if(!paused&&!gameOver) togglePause(); helpEl.classList.add('gx-show'); }
+    function hideHelp(){ helpEl.classList.remove('gx-show'); if(!helpWasPaused&&paused&&!gameOver) togglePause(); }
+    document.getElementById('gxHelpOpen').onclick=showHelp;
+    document.getElementById('gxHelpClose').onclick=hideHelp;
+    helpEl.addEventListener('click',e=>{ if(e.target===helpEl) hideHelp(); });
+
     reset();
+    if(!localStorage.getItem(SEEN_KEY)){ localStorage.setItem(SEEN_KEY,'1'); showHelp(); }
   </script>
 </body>
 </html>

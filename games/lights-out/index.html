@@ -33,6 +33,7 @@
     <span class="gx-pill">Lvl <b id="level">1</b></span>
     <span class="gx-pill">Moves <b id="moves">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -57,6 +58,23 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Switch off every light — tapping a cell flips it and its four neighbours.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap light</b> <span>Flip cell + neighbours</span></li>
+        <li><b>Arrows / WASD</b> <span>Move cursor</span></li>
+        <li><b>Space / Enter</b> <span>Flip selected cell</span></li>
+        <li><b>H</b> <span>Hint</span></li>
+        <li><b>P</b> <span>Pause</span></li>
+        <li><b>R</b> <span>Restart level</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -360,6 +378,8 @@
     }
 
     function render(){
+      // clear every frame (in CSS px; transform already scales to device px)
+      ctx.clearRect(0, 0, size, size);
       // board background
       const bg = ctx.createLinearGradient(0, 0, 0, size);
       bg.addColorStop(0, '#161a26'); bg.addColorStop(1, '#0e1018');
@@ -435,8 +455,32 @@
       requestFrame();
     }
 
+    // ---- how to play overlay ----
+    const helpEl = document.getElementById('gxHelp');
+    const SEEN_KEY = 'gamf-seen-puzzle-lights-out';
+    let resumeAfterHelp = false;
+    function openHelp(){
+      // pause the game while help is open (resume only if we paused it)
+      resumeAfterHelp = !won && !paused;
+      if(resumeAfterHelp){ paused = true; requestFrame(); }
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if(resumeAfterHelp){ paused = false; requestFrame(); }
+      resumeAfterHelp = false;
+    }
+    document.getElementById('gxHelpOpen').onclick = openHelp;
+    document.getElementById('gxHelpClose').onclick = closeHelp;
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
     // ---- boot ----
     fullReset();
+
+    if(!localStorage.getItem(SEEN_KEY)){
+      helpEl.classList.add('gx-show');
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

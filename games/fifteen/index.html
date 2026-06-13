@@ -35,6 +35,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Moves <b id="moves">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -57,6 +58,22 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New puzzle</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Slide the numbered tiles into the gap until they read 1&ndash;15 in order, using the fewest moves.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap a tile</b><span>Slide it into the gap</span></li>
+        <li><b>Swipe / Arrows / WASD</b><span>Slide a tile toward the gap</span></li>
+        <li><b>Space / Enter</b><span>Slide highlighted tile</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -285,6 +302,8 @@
     }
 
     function render(){
+      // clear every frame so nothing (stale corners / stray particles) lingers
+      ctx.clearRect(0, 0, size, size);
       // board frame
       const bg = ctx.createLinearGradient(0, 0, 0, size);
       bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#15110e');
@@ -382,8 +401,29 @@
       else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
     });
 
+    // ---- how to play overlay ----
+    const SEEN_KEY = 'gamf-seen-puzzle-fifteen';
+    const helpEl = document.getElementById('gxHelp');
+    let helpPausedByOverlay = false;
+    function openHelp(){
+      if(!paused && !won){ paused = true; helpPausedByOverlay = true; requestFrame(); }
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if(helpPausedByOverlay){ paused = false; helpPausedByOverlay = false; requestFrame(); }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
     // ---- boot ----
     startGame();
+
+    if(!localStorage.getItem(SEEN_KEY)){
+      openHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

@@ -58,6 +58,7 @@
     <span class="gx-pill">Lvl <b id="level">1</b></span>
     <span class="gx-pill">Push <b id="pushes">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -90,6 +91,22 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Push every crate onto a glowing target tile to clear the level.</p>
+      <ul class="gx-help__list">
+        <li><b>Swipe / Arrows</b><span>Move &amp; push crates</span></li>
+        <li><b>Tap tile</b><span>Step toward it</span></li>
+        <li><b>Center / Z</b><span>Undo last move</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart level</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -593,8 +610,29 @@
       else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
     });
 
+    // ---- how to play overlay ----
+    const SEEN_KEY = 'gamf-seen-puzzle-sokoban';
+    const helpEl = document.getElementById('gxHelp');
+    let helpPausedByOverlay = false;
+    function openHelp(){
+      if(!paused && !won){ paused = true; helpPausedByOverlay = true; requestFrame(); }
+      helpEl.classList.add('gx-show');
+    }
+    function closeHelp(){
+      helpEl.classList.remove('gx-show');
+      if(helpPausedByOverlay){ paused = false; helpPausedByOverlay = false; requestFrame(); }
+    }
+    document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
+    document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
     // ---- boot ----
     fullReset();
+
+    if(!localStorage.getItem(SEEN_KEY)){
+      openHelp();
+      localStorage.setItem(SEEN_KEY, '1');
+    }
   </script>
 </body>
 </html>

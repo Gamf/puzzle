@@ -30,6 +30,7 @@
     <span class="gx-hud__spacer"></span>
     <span class="gx-pill">Round <b id="score">0</b></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+    <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
 
   <div class="stage"><canvas id="c"></canvas></div>
@@ -52,6 +53,23 @@
       <button class="gx-btn gx-btn--primary" id="again">
         <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Play again</span>
       </button>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="gx-modal" id="gxHelp">
+    <div class="gx-modal__card">
+      <div class="gx-modal__title">How to Play</div>
+      <p class="gx-help__obj">Watch the pads flash, then repeat the growing colour sequence in the same order — go as many rounds as you can.</p>
+      <ul class="gx-help__list">
+        <li><b>Tap pad</b><span>Repeat the colour</span></li>
+        <li><b>Arrows / WASD</b><span>Aim the cursor</span></li>
+        <li><b>1–4 keys</b><span>Pick a pad directly</span></li>
+        <li><b>Space / Enter</b><span>Press selected pad</span></li>
+        <li><b>P</b><span>Pause</span></li>
+        <li><b>R</b><span>Restart</span></li>
+      </ul>
+      <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
     </div>
   </div>
 
@@ -554,9 +572,39 @@
       if(e.key >= '1' && e.key <= '4'){ e.preventDefault(); ensureAudio(); if(phase === 'input') pressPad(+e.key - 1); }
     });
 
+    // ---- how to play overlay ----
+    const HELP_KEY = 'gamf-seen-puzzle-simon';
+    const helpEl = document.getElementById('gxHelp');
+    const helpOpenEl = document.getElementById('gxHelpOpen');
+    const helpCloseEl = document.getElementById('gxHelpClose');
+    let helpPausedByHelp = false;
+    function showHelp(){
+      if(phase !== 'paused' && phase !== 'over' && phase !== 'idle'){
+        togglePause();
+        helpPausedByHelp = true;
+      }
+      helpEl.classList.add('gx-show');
+    }
+    function hideHelp(){
+      helpEl.classList.remove('gx-show');
+      if(helpPausedByHelp){
+        helpPausedByHelp = false;
+        if(phase === 'paused') togglePause();
+      }
+    }
+    helpOpenEl.addEventListener('click', showHelp);
+    helpCloseEl.addEventListener('click', hideHelp);
+    helpEl.addEventListener('click', e => { if(e.target === helpEl) hideHelp(); });
+
     // ---- boot ----
     fit();
     start();
+
+    // First visit: show the how-to-play overlay (and pause the just-started game).
+    if(!localStorage.getItem(HELP_KEY)){
+      showHelp();
+      localStorage.setItem(HELP_KEY, '1');
+    }
   </script>
 </body>
 </html>
