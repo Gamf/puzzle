@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0f13">
+  <title>2048 — Gamf</title>
+  <style>
+    *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+    html,body{margin:0;height:100%;overflow:hidden;background:#0e0f13;color:#f2f3f5;
+      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+      padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+    .top{display:flex;align-items:center;gap:16px;width:min(90vw,420px)}
+    .top a{color:#6c8cff;text-decoration:none;font-size:.9rem} .score{margin-left:auto;font-weight:700}
+    #board{width:min(90vw,420px);aspect-ratio:1;background:#181b24;border-radius:14px;padding:10px;
+      display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:10px;touch-action:none}
+    .cell{border-radius:10px;background:#21263a;display:grid;place-items:center;font-weight:800;
+      font-size:clamp(1rem,6vw,1.8rem);transition:transform .08s}
+    .hint{color:#7d8493;font-size:.85rem} button{all:unset;color:#6c8cff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><a href="../../">← Puzzle</a><span class="score">Score: <b id="score">0</b></span></div>
+    <div id="board"></div>
+    <div class="hint">Swipe to move · <button id="reset">New game</button></div>
+  </div>
+  <script type="module">
+    import { onSwipe } from './touch.js';
+    const N = 4, boardEl = document.getElementById('board'), scoreEl = document.getElementById('score');
+    let grid, score;
+
+    function tint(v){ if(!v) return '#21263a'; const t=Math.min(Math.log2(v)/11,1);
+      return `hsl(${30+ t*180},60%,${22+t*18}%)`; }
+
+    function reset(){ grid = Array.from({length:N},()=>Array(N).fill(0)); score=0; addTile(); addTile(); draw(); }
+    function addTile(){ const empty=[]; grid.forEach((r,y)=>r.forEach((v,x)=>{if(!v)empty.push([x,y]);}));
+      if(!empty.length) return; const [x,y]=empty[Math.floor(rand()*empty.length)]; grid[y][x]=rand()<.9?2:4; }
+    let seed=12345; function rand(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+
+    function draw(){ boardEl.innerHTML=''; scoreEl.textContent=score;
+      for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const v=grid[y][x]; const c=document.createElement('div');
+        c.className='cell'; c.style.background=tint(v); c.textContent=v||''; boardEl.appendChild(c);} }
+
+    function slide(row){ let a=row.filter(v=>v); for(let i=0;i<a.length-1;i++){ if(a[i]===a[i+1]){a[i]*=2;score+=a[i];a.splice(i+1,1);} }
+      while(a.length<N) a.push(0); return a; }
+    function move(dir){ const before=JSON.stringify(grid); let g=grid;
+      const rot=(g)=>g[0].map((_,i)=>g.map(r=>r[i]));
+      if(dir==='left') g=g.map(slide);
+      if(dir==='right') g=g.map(r=>slide(r.reverse()).reverse());
+      if(dir==='up'){ g=rot(g).map(slide); g=rot(g); }
+      if(dir==='down'){ g=rot(g).map(r=>slide(r.reverse()).reverse()); g=rot(g); }
+      grid=g; if(JSON.stringify(grid)!==before){ addTile(); draw(); } }
+
+    onSwipe(boardEl, move, 24);
+    window.addEventListener('keydown',e=>{ const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key]; if(m){e.preventDefault();move(m);} });
+    document.getElementById('reset').onclick=reset;
+    reset();
+  </script>
+</body>
+</html>

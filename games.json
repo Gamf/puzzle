@@ -1,0 +1,16 @@
+{
+  "genre": "puzzle",
+  "title": "Puzzle",
+  "games": [
+    {
+      "slug": "sample-2048",
+      "title": "2048",
+      "path": "games/sample-2048/",
+      "icon": "🔢",
+      "dims": "2D",
+      "tags": ["swipe", "numbers"],
+      "license": "MIT",
+      "credit": "Gamf sample"
+    }
+  ]
+}
