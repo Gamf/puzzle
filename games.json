@@ -3,6 +3,16 @@
   "title": "Puzzle",
   "games": [
     {
+      "slug": "minesweeper",
+      "title": "Minesweeper",
+      "path": "games/minesweeper/",
+      "icon": "💣",
+      "dims": "2D",
+      "tags": ["tap", "flag", "logic"],
+      "license": "MIT",
+      "credit": "Gamf · classic Minesweeper design"
+    },
+    {
       "slug": "tetris",
       "title": "Tetris",
       "path": "games/tetris/",

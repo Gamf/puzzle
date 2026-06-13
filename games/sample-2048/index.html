@@ -7,55 +7,121 @@
   <title>2048 — Gamf</title>
   <style>
     *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
-    html,body{margin:0;height:100%;overflow:hidden;background:#0e0f13;color:#f2f3f5;
+    html,body{margin:0;height:100%;overflow:hidden;
+      background:radial-gradient(120% 120% at 50% -10%,#191c2a 0%,#0e0f13 60%);color:#f2f3f5;
       font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none}
-    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
       padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
-    .top{display:flex;align-items:center;gap:16px;width:min(90vw,420px)}
-    .top a{color:#6c8cff;text-decoration:none;font-size:.9rem} .score{margin-left:auto;font-weight:700}
-    #board{width:min(90vw,420px);aspect-ratio:1;background:#181b24;border-radius:14px;padding:10px;
-      display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:10px;touch-action:none}
-    .cell{border-radius:10px;background:#21263a;display:grid;place-items:center;font-weight:800;
-      font-size:clamp(1rem,6vw,1.8rem);transition:transform .08s}
-    .hint{color:#7d8493;font-size:.85rem} button{all:unset;color:#6c8cff;cursor:pointer}
+    .top{display:flex;align-items:center;gap:14px;width:min(92vw,440px)}
+    .top a{color:#6c8cff;text-decoration:none;font-size:.9rem}
+    .top .best{color:#5ad1a8;font-weight:700;font-size:.85rem;margin-left:auto}
+    .top .score{font-weight:700}
+    canvas{border-radius:16px;touch-action:none;
+      box-shadow:0 12px 44px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+    .hint{color:#7d8493;font-size:.82rem;text-align:center} button.lnk{all:unset;color:#6c8cff;cursor:pointer}
+    .over{position:fixed;inset:0;display:none;place-items:center;background:rgba(8,9,13,.84);z-index:3;text-align:center}
+    .over.show{display:grid} .over .card{padding:26px 34px;border-radius:18px;
+      background:linear-gradient(180deg,#181b27,#101218);border:1px solid #2a2f42;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+    .over h2{margin:0 0 10px;font-size:1.6rem} .over .row{margin:4px 0;color:#c7ccda} .over b{color:#fff}
+    .over .b2{color:#5ad1a8}
+    .over button{all:unset;margin-top:16px;color:#0e0f13;background:linear-gradient(180deg,#7d9bff,#6c8cff);
+      font-weight:700;padding:12px 26px;border-radius:12px;cursor:pointer}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="top"><a href="../../">← Puzzle</a><span class="score">Score: <b id="score">0</b></span></div>
-    <div id="board"></div>
-    <div class="hint">Swipe to move · <button id="reset">New game</button></div>
+    <div class="top"><a href="../../">← Puzzle</a>
+      <span class="score">Score: <b id="score">0</b></span>
+      <span class="best">Best: <b id="best">0</b></span></div>
+    <canvas id="c"></canvas>
+    <div class="hint">swipe / arrows / WASD to move · <button class="lnk" id="reset">New game (R)</button></div>
   </div>
+  <div class="over" id="over"><div class="card"><h2 id="overTitle">Game Over</h2>
+    <div class="row">Score <b id="finalScore">0</b></div>
+    <div class="row b2">Best <b id="finalBest">0</b></div>
+    <button id="again">Play again</button></div></div>
   <script type="module">
     import { onSwipe } from './touch.js';
-    const N = 4, boardEl = document.getElementById('board'), scoreEl = document.getElementById('score');
-    let grid, score;
-
-    function tint(v){ if(!v) return '#21263a'; const t=Math.min(Math.log2(v)/11,1);
-      return `hsl(${30+ t*180},60%,${22+t*18}%)`; }
-
-    function reset(){ grid = Array.from({length:N},()=>Array(N).fill(0)); score=0; addTile(); addTile(); draw(); }
-    function addTile(){ const empty=[]; grid.forEach((r,y)=>r.forEach((v,x)=>{if(!v)empty.push([x,y]);}));
-      if(!empty.length) return; const [x,y]=empty[Math.floor(rand()*empty.length)]; grid[y][x]=rand()<.9?2:4; }
+    const N=4, BEST_KEY='gamf-puzzle-sample-2048-best';
+    const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+    const scoreEl=document.getElementById('score'), bestEl=document.getElementById('best');
+    let grid, score, size=400, cell=90, gap=10, gameOver, won, parts=[];
+    let best=parseInt(localStorage.getItem(BEST_KEY)||'0',10)||0; bestEl.textContent=best;
     let seed=12345; function rand(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
 
-    function draw(){ boardEl.innerHTML=''; scoreEl.textContent=score;
-      for(let y=0;y<N;y++) for(let x=0;x<N;x++){ const v=grid[y][x]; const c=document.createElement('div');
-        c.className='cell'; c.style.background=tint(v); c.textContent=v||''; boardEl.appendChild(c);} }
+    function fit(){ size=Math.min(innerWidth*0.92,440,innerHeight-220);
+      const dpr=Math.min(devicePixelRatio||1,2);
+      canvas.width=size*dpr; canvas.height=size*dpr; canvas.style.width=size+'px'; canvas.style.height=size+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0); gap=size*0.025; cell=(size-gap*(N+1))/N; draw(); }
+    addEventListener('resize', fit);
 
-    function slide(row){ let a=row.filter(v=>v); for(let i=0;i<a.length-1;i++){ if(a[i]===a[i+1]){a[i]*=2;score+=a[i];a.splice(i+1,1);} }
+    function tint(v){ if(!v) return ['#222840','#1b2036']; const t=Math.min(Math.log2(v)/11,1);
+      const h=30+t*200; return [`hsl(${h},70%,${40+t*14}%)`,`hsl(${h},70%,${26+t*10}%)`]; }
+    function txtColor(v){ return v<=4?'#cdd3e6':'#0e0f13'; }
+
+    function reset(){ grid=Array.from({length:N},()=>Array(N).fill(0)); score=0; gameOver=false; won=false; parts=[];
+      document.getElementById('over').classList.remove('show'); addTile(); addTile(); fit(); requestAnimationFrame(loop); }
+    function addTile(){ const empty=[]; grid.forEach((r,y)=>r.forEach((v,x)=>{if(!v)empty.push([x,y]);}));
+      if(!empty.length) return; const [x,y]=empty[Math.floor(rand()*empty.length)]; grid[y][x]=rand()<.9?2:4; }
+
+    function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+    function cellXY(x,y){ return [gap+x*(cell+gap), gap+y*(cell+gap)]; }
+    function burst(x,y,c){ const[cx,cy]=cellXY(x,y); for(let i=0;i<10;i++){ const a=rand()*Math.PI*2,s=1+rand()*3.5;
+      parts.push({x:cx+cell/2,y:cy+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c}); } }
+
+    function draw(){ const bg=ctx.createLinearGradient(0,0,0,size);
+      bg.addColorStop(0,'#161927'); bg.addColorStop(1,'#11131d');
+      ctx.fillStyle=bg; roundRect(0,0,size,size,16); ctx.fill();
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){ const[px,py]=cellXY(x,y);
+        ctx.fillStyle='rgba(255,255,255,.03)'; roundRect(px,py,cell,cell,10); ctx.fill(); }
+      for(let y=0;y<N;y++)for(let x=0;x<N;x++){ const v=grid[y][x]; if(!v) continue; const[px,py]=cellXY(x,y);
+        const[c1,c2]=tint(v); const g=ctx.createLinearGradient(px,py,px,py+cell); g.addColorStop(0,c1); g.addColorStop(1,c2);
+        ctx.shadowColor=c1; ctx.shadowBlur=v>=128?14:6; ctx.fillStyle=g; roundRect(px,py,cell,cell,10); ctx.fill(); ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(255,255,255,.14)'; roundRect(px,py,cell,cell*.3,10); ctx.fill();
+        ctx.fillStyle=txtColor(v); ctx.textAlign='center'; ctx.textBaseline='middle';
+        const fs=v<100?cell*.42:v<1000?cell*.34:cell*.26; ctx.font='800 '+fs+'px system-ui';
+        ctx.fillText(v,px+cell/2,py+cell/2+1); }
+      for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c;
+        ctx.shadowColor=p.c; ctx.shadowBlur=8; ctx.fillRect(p.x-2,p.y-2,4,4); }
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+      scoreEl.textContent=score; }
+
+    function loop(){ let alive=false; for(const p of parts){ p.x+=p.vx; p.y+=p.vy; p.vy+=.12; p.life-=.045; if(p.life>0)alive=true; }
+      parts=parts.filter(p=>p.life>0); draw(); if(alive) requestAnimationFrame(loop); }
+
+    let mergedFlash=[];
+    function slide(row){ let a=row.filter(v=>v); for(let i=0;i<a.length-1;i++){ if(a[i]===a[i+1]){a[i]*=2;score+=a[i];a.splice(i+1,1);mergedFlash.push(a[i]);} }
       while(a.length<N) a.push(0); return a; }
-    function move(dir){ const before=JSON.stringify(grid); let g=grid;
+    function move(dir){ if(gameOver) return; const before=JSON.stringify(grid); let g=grid; mergedFlash=[];
       const rot=(g)=>g[0].map((_,i)=>g.map(r=>r[i]));
       if(dir==='left') g=g.map(slide);
       if(dir==='right') g=g.map(r=>slide(r.reverse()).reverse());
       if(dir==='up'){ g=rot(g).map(slide); g=rot(g); }
       if(dir==='down'){ g=rot(g).map(r=>slide(r.reverse()).reverse()); g=rot(g); }
-      grid=g; if(JSON.stringify(grid)!==before){ addTile(); draw(); } }
+      grid=g; if(JSON.stringify(grid)!==before){ addTile();
+        for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(mergedFlash.length && grid[y][x] && mergedFlash.includes(grid[y][x])){ burst(x,y,tint(grid[y][x])[0]); } }
+        if(!won && grid.some(r=>r.includes(2048))){ won=true; end(true); }
+        if(score>best){ best=score; localStorage.setItem(BEST_KEY,best); bestEl.textContent=best; }
+        requestAnimationFrame(loop);
+        if(!hasMoves()) end(false); } }
+    function hasMoves(){ for(let y=0;y<N;y++)for(let x=0;x<N;x++){ if(!grid[y][x]) return true;
+      if(x<N-1&&grid[y][x]===grid[y][x+1]) return true; if(y<N-1&&grid[y][x]===grid[y+1][x]) return true; } return false; }
+    function end(victory){ gameOver=true;
+      if(score>best){ best=score; localStorage.setItem(BEST_KEY,best); bestEl.textContent=best; }
+      document.getElementById('overTitle').textContent=victory?'You reached 2048!':'Game Over';
+      document.getElementById('finalScore').textContent=score;
+      document.getElementById('finalBest').textContent=best;
+      document.getElementById('over').classList.add('show'); }
 
-    onSwipe(boardEl, move, 24);
-    window.addEventListener('keydown',e=>{ const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key]; if(m){e.preventDefault();move(m);} });
+    onSwipe(canvas, move, 24);
+    window.addEventListener('keydown',e=>{ const k=e.key;
+      const m={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down',
+        a:'left',A:'left',d:'right',D:'right',w:'up',W:'up',s:'down',S:'down'}[k];
+      if(m){e.preventDefault();move(m);} else if(k===' '||k==='Enter'){e.preventDefault();}
+      else if(k==='r'||k==='R'){e.preventDefault();reset();} });
     document.getElementById('reset').onclick=reset;
+    document.getElementById('again').onclick=reset;
     reset();
   </script>
 </body>

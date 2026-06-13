@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0f13">
+  <title>Minesweeper — Gamf</title>
+  <style>
+    *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+    html,body{margin:0;height:100%;overflow:hidden;
+      background:radial-gradient(120% 120% at 50% -10%,#191c2a 0%,#0e0f13 60%);color:#f2f3f5;
+      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+      padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+    .top{display:flex;align-items:center;gap:14px;width:min(94vw,460px)}
+    .top a{color:#6c8cff;text-decoration:none;font-size:.9rem}
+    .top .mines{font-weight:700} .top .best{color:#5ad1a8;font-weight:700;font-size:.85rem;margin-left:auto}
+    .top .time{font-weight:700}
+    canvas{border-radius:16px;touch-action:none;
+      box-shadow:0 12px 44px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+    .bar{display:flex;align-items:center;gap:10px;width:min(94vw,460px)}
+    .bar .flagmode{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .bar button{all:unset;background:linear-gradient(180deg,#1b1f2c,#15171f);border:1px solid #2a2f42;
+      border-radius:12px;padding:10px 14px;font-size:1rem;cursor:pointer;min-height:44px}
+    .bar button.on{background:linear-gradient(180deg,#ff9d6c,#ff7a6c);color:#0e0f13;border-color:#ff7a6c;font-weight:700}
+    .bar button:active{transform:translateY(1px)}
+    .hint{color:#7d8493;font-size:.8rem;text-align:center;max-width:min(94vw,460px)}
+    .over{position:fixed;inset:0;display:none;place-items:center;background:rgba(8,9,13,.84);z-index:3;text-align:center}
+    .over.show{display:grid} .over .card{padding:26px 34px;border-radius:18px;
+      background:linear-gradient(180deg,#181b27,#101218);border:1px solid #2a2f42;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+    .over h2{margin:0 0 10px;font-size:1.6rem} .over .row{margin:4px 0;color:#c7ccda} .over b{color:#fff}
+    .over .b2{color:#5ad1a8}
+    .over button{all:unset;margin-top:16px;color:#0e0f13;background:linear-gradient(180deg,#7d9bff,#6c8cff);
+      font-weight:700;padding:12px 26px;border-radius:12px;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><a href="../../">← Puzzle</a>
+      <span class="mines">💣 <b id="mineCount">0</b></span>
+      <span class="best">Best: <b id="best">—</b></span>
+      <span class="time">⏱ <b id="time">0</b></span></div>
+    <canvas id="c"></canvas>
+    <div class="bar">
+      <button id="newBtn">🙂 New (R)</button>
+      <div class="flagmode">
+        <button id="flagBtn" aria-label="toggle flag mode">🚩 Flag</button>
+      </div>
+    </div>
+    <div class="hint">tap reveal · long-press or 🚩 mode to flag · arrows/WASD move · Space reveal · F flag · R restart</div>
+  </div>
+  <div class="over" id="over"><div class="card"><h2 id="overTitle">Game Over</h2>
+    <div class="row" id="overMsg">You hit a mine.</div>
+    <div class="row">Time <b id="finalTime">0</b>s</div>
+    <div class="row b2">Best <b id="finalBest">—</b></div>
+    <button id="again">Play again</button></div></div>
+  <script type="module">
+    import { onTap } from './touch.js';
+    const COLS=9, ROWS=9, MINES=10;
+    const BEST_KEY='gamf-puzzle-minesweeper-best';
+    const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
+    const NUMCOL=['','#6c8cff','#5ad1a8','#ff7a6c','#b06cff','#f2c14e','#5ad1e0','#e0e3ee','#9aa0b4'];
+    let cell=36, dpr=1;
+    let grid, revealed, flagged, mineMap, started, gameOver, win, firstClick, time, timer=null, parts=[];
+    let cursor={x:0,y:0}, flagMode=false;
+    let best=parseInt(localStorage.getItem(BEST_KEY)||'0',10)||0;
+    document.getElementById('best').textContent=best?best+'s':'—';
+    document.getElementById('mineCount').textContent=MINES;
+
+    let seed=99173; function rand(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+
+    function fit(){ const maxW=Math.min(innerWidth*0.94,460);
+      const maxH=innerHeight-200; const s=Math.min(maxW/COLS,maxH/ROWS); cell=Math.max(20,Math.floor(s));
+      dpr=Math.min(devicePixelRatio||1,2);
+      canvas.width=COLS*cell*dpr; canvas.height=ROWS*cell*dpr;
+      canvas.style.width=COLS*cell+'px'; canvas.style.height=ROWS*cell+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0); draw(); }
+    addEventListener('resize', fit);
+
+    function reset(){ grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+      revealed=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+      flagged=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+      mineMap=Array.from({length:ROWS},()=>Array(COLS).fill(false));
+      started=false; gameOver=false; win=false; firstClick=true; time=0; parts=[];
+      cursor={x:Math.floor(COLS/2),y:Math.floor(ROWS/2)};
+      if(timer){clearInterval(timer);timer=null;}
+      document.getElementById('time').textContent='0';
+      document.getElementById('mineCount').textContent=MINES;
+      document.getElementById('newBtn').textContent='🙂 New (R)';
+      document.getElementById('over').classList.remove('show'); fit(); requestAnimationFrame(loop); }
+
+    function placeMines(sx,sy){ let placed=0;
+      while(placed<MINES){ const x=Math.floor(rand()*COLS), y=Math.floor(rand()*ROWS);
+        if(mineMap[y][x]) continue; if(Math.abs(x-sx)<=1&&Math.abs(y-sy)<=1) continue;
+        mineMap[y][x]=true; placed++; }
+      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ if(mineMap[y][x]){grid[y][x]=-1;continue;}
+        let n=0; for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy;
+          if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&mineMap[ny][nx]) n++; } grid[y][x]=n; } }
+
+    function startTimer(){ if(timer) return; timer=setInterval(()=>{ time++; document.getElementById('time').textContent=time; },1000); }
+
+    function flagsUsed(){ let n=0; for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(flagged[y][x]) n++; return n; }
+    function updateMineCount(){ document.getElementById('mineCount').textContent=Math.max(0,MINES-flagsUsed()); }
+
+    function flood(x,y){ const stack=[[x,y]];
+      while(stack.length){ const [cx,cy]=stack.pop(); if(cx<0||cx>=COLS||cy<0||cy>=ROWS) continue;
+        if(revealed[cy][cx]||flagged[cy][cx]) continue; revealed[cy][cx]=true;
+        if(grid[cy][cx]===0){ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(dx||dy) stack.push([cx+dx,cy+dy]); } } } }
+
+    function reveal(x,y){ if(gameOver||revealed[y][x]||flagged[y][x]) return;
+      if(firstClick){ placeMines(x,y); firstClick=false; started=true; startTimer(); }
+      if(mineMap[y][x]){ revealed[y][x]=true; burstMine(x,y); loseGame(); return; }
+      flood(x,y); checkWin(); }
+
+    function toggleFlag(x,y){ if(gameOver||revealed[y][x]) return;
+      if(firstClick){ placeMines(x,y); firstClick=false; started=true; startTimer(); }
+      flagged[y][x]=!flagged[y][x]; updateMineCount(); }
+
+    function chord(x,y){ if(!revealed[y][x]||grid[y][x]<=0) return; let f=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy;
+        if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&flagged[ny][nx]) f++; }
+      if(f===grid[y][x]){ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy;
+        if(nx>=0&&nx<COLS&&ny>=0&&ny<ROWS&&!flagged[ny][nx]&&!revealed[ny][nx]) reveal(nx,ny); } } }
+
+    function checkWin(){ let safe=0; for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(revealed[y][x]&&!mineMap[y][x]) safe++;
+      if(safe===COLS*ROWS-MINES){ winGame(); } }
+
+    function loseGame(){ gameOver=true; if(timer){clearInterval(timer);timer=null;}
+      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(mineMap[y][x]) revealed[y][x]=true;
+      document.getElementById('newBtn').textContent='💥 New (R)';
+      showOver(false); }
+    function winGame(){ gameOver=true; win=true; if(timer){clearInterval(timer);timer=null;}
+      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ if(mineMap[y][x]){ flagged[y][x]=true; burstWin(x,y);} }
+      updateMineCount();
+      if(!best||time<best){ best=time; localStorage.setItem(BEST_KEY,best); document.getElementById('best').textContent=best+'s'; }
+      document.getElementById('newBtn').textContent='😎 New (R)';
+      showOver(true); }
+    function showOver(victory){
+      document.getElementById('overTitle').textContent=victory?'Cleared! 🎉':'Boom!';
+      document.getElementById('overMsg').textContent=victory?'You found all the mines.':'You hit a mine.';
+      document.getElementById('finalTime').textContent=time;
+      document.getElementById('finalBest').textContent=best?best+'s':'—';
+      document.getElementById('over').classList.add('show'); }
+
+    function burstMine(x,y){ for(let i=0;i<16;i++){ const a=rand()*Math.PI*2,s=1+rand()*4.5;
+      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#ff7a6c'}); } }
+    function burstWin(x,y){ for(let i=0;i<6;i++){ const a=rand()*Math.PI*2,s=1+rand()*3;
+      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#5ad1a8'}); } }
+
+    function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+    function draw(){ const W=COLS*cell, H=ROWS*cell;
+      const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#161927'); bg.addColorStop(1,'#11131d');
+      ctx.fillStyle=bg; roundRect(0,0,W,H,14); ctx.fill();
+      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ const px=x*cell, py=y*cell, m=2;
+        if(revealed[y][x]){
+          const op=ctx.createLinearGradient(px,py,px,py+cell); op.addColorStop(0,'#0f1119'); op.addColorStop(1,'#0c0e15');
+          ctx.fillStyle=op; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
+          if(mineMap[y][x]){ ctx.fillStyle='#ff7a6c'; ctx.shadowColor='#ff7a6c'; ctx.shadowBlur=12;
+            ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,cell*0.22,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; }
+          else if(grid[y][x]>0){ ctx.fillStyle=NUMCOL[grid[y][x]]; ctx.shadowColor=NUMCOL[grid[y][x]]; ctx.shadowBlur=6;
+            ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='800 '+Math.floor(cell*0.5)+'px system-ui';
+            ctx.fillText(grid[y][x],px+cell/2,py+cell/2+1); ctx.shadowBlur=0; }
+        } else {
+          const cg=ctx.createLinearGradient(px,py,px,py+cell); cg.addColorStop(0,'#222840'); cg.addColorStop(1,'#1a1f33');
+          ctx.fillStyle=cg; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.08)'; roundRect(px+m,py+m,cell-m*2,Math.max(3,cell*.2),4); ctx.fill();
+          if(flagged[y][x]){ ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=Math.floor(cell*0.5)+'px system-ui';
+            ctx.fillText('🚩',px+cell/2,py+cell/2+1); }
+        }
+      }
+      if(!gameOver){ const px=cursor.x*cell, py=cursor.y*cell;
+        ctx.strokeStyle='#6c8cff'; ctx.lineWidth=2.5; ctx.shadowColor='#6c8cff'; ctx.shadowBlur=10;
+        roundRect(px+2,py+2,cell-4,cell-4,5); ctx.stroke(); ctx.shadowBlur=0; }
+      for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c;
+        ctx.shadowColor=p.c; ctx.shadowBlur=8; ctx.fillRect(p.x-2,p.y-2,4,4); }
+      ctx.globalAlpha=1; ctx.shadowBlur=0; }
+
+    function loop(){ let alive=false; for(const p of parts){ p.x+=p.vx; p.y+=p.vy; p.vy+=.12; p.life-=.04; if(p.life>0)alive=true; }
+      parts=parts.filter(p=>p.life>0); draw(); if(alive) requestAnimationFrame(loop); }
+
+    function cellAt(clientX,clientY){ const r=canvas.getBoundingClientRect();
+      const x=Math.floor((clientX-r.left)/cell), y=Math.floor((clientY-r.top)/cell);
+      if(x<0||x>=COLS||y<0||y>=ROWS) return null; return [x,y]; }
+
+    // Touch: tap reveals (or flags in flag mode); long-press flags.
+    let pressTimer=null, longPressed=false, downCell=null;
+    onTap(canvas,(cx,cy)=>{ if(longPressed){longPressed=false;return;} const c=cellAt(cx,cy); if(!c) return;
+      cursor={x:c[0],y:c[1]};
+      if(flagMode){ toggleFlag(c[0],c[1]); }
+      else if(revealed[c[1]][c[0]]){ chord(c[0],c[1]); }
+      else { reveal(c[0],c[1]); }
+      requestAnimationFrame(loop); });
+    canvas.addEventListener('pointerdown',(e)=>{ longPressed=false; downCell=cellAt(e.clientX,e.clientY);
+      pressTimer=setTimeout(()=>{ if(downCell&&!flagMode){ longPressed=true; toggleFlag(downCell[0],downCell[1]); requestAnimationFrame(loop); } },380); });
+    const clearPress=()=>{ if(pressTimer){clearTimeout(pressTimer);pressTimer=null;} };
+    canvas.addEventListener('pointerup',clearPress);
+    canvas.addEventListener('pointercancel',clearPress);
+    canvas.addEventListener('pointermove',(e)=>{ if(!downCell) return; const c=cellAt(e.clientX,e.clientY);
+      if(!c||c[0]!==downCell[0]||c[1]!==downCell[1]) clearPress(); });
+
+    document.getElementById('newBtn').onclick=reset;
+    document.getElementById('again').onclick=reset;
+    document.getElementById('flagBtn').onclick=()=>{ flagMode=!flagMode;
+      document.getElementById('flagBtn').classList.toggle('on',flagMode); };
+
+    addEventListener('keydown',e=>{ const k=e.key;
+      if(k==='ArrowLeft'||k==='a'||k==='A'){e.preventDefault();cursor.x=Math.max(0,cursor.x-1);}
+      else if(k==='ArrowRight'||k==='d'||k==='D'){e.preventDefault();cursor.x=Math.min(COLS-1,cursor.x+1);}
+      else if(k==='ArrowUp'||k==='w'||k==='W'){e.preventDefault();cursor.y=Math.max(0,cursor.y-1);}
+      else if(k==='ArrowDown'||k==='s'||k==='S'){e.preventDefault();cursor.y=Math.min(ROWS-1,cursor.y+1);}
+      else if(k===' '||k==='Enter'){e.preventDefault();
+        if(revealed[cursor.y][cursor.x]) chord(cursor.x,cursor.y); else reveal(cursor.x,cursor.y); }
+      else if(k==='f'||k==='F'){e.preventDefault();toggleFlag(cursor.x,cursor.y);}
+      else if(k==='r'||k==='R'){e.preventDefault();reset();return;}
+      else return;
+      requestAnimationFrame(loop); });
+
+    reset();
+  </script>
+</body>
+</html>
