@@ -3,57 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0e0f13">
+  <meta name="theme-color" content="#07080c">
   <title>Minesweeper — Gamf</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
   <style>
-    *{box-sizing:border-box;-webkit-user-select:none;user-select:none}
-    html,body{margin:0;height:100%;overflow:hidden;
-      background:radial-gradient(120% 120% at 50% -10%,#191c2a 0%,#0e0f13 60%);color:#f2f3f5;
-      font-family:system-ui,sans-serif;-webkit-tap-highlight-color:transparent;touch-action:none}
-    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    body { --gx-accent: #6c8cff; }
+    *{-webkit-user-select:none;user-select:none}
+    html,body{height:100%;overflow:hidden;touch-action:none}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
       padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
-    .top{display:flex;align-items:center;gap:14px;width:min(94vw,460px)}
-    .top a{color:#6c8cff;text-decoration:none;font-size:.9rem}
-    .top .mines{font-weight:700} .top .best{color:#5ad1a8;font-weight:700;font-size:.85rem;margin-left:auto}
-    .top .time{font-weight:700}
-    canvas{border-radius:16px;touch-action:none;
-      box-shadow:0 12px 44px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
-    .bar{display:flex;align-items:center;gap:10px;width:min(94vw,460px)}
-    .bar .flagmode{margin-left:auto;display:flex;align-items:center;gap:8px}
-    .bar button{all:unset;background:linear-gradient(180deg,#1b1f2c,#15171f);border:1px solid #2a2f42;
-      border-radius:12px;padding:10px 14px;font-size:1rem;cursor:pointer;min-height:44px}
-    .bar button.on{background:linear-gradient(180deg,#ff9d6c,#ff7a6c);color:#0e0f13;border-color:#ff7a6c;font-weight:700}
+    canvas{border-radius:var(--r-lg);touch-action:none;
+      box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+    .bar{display:flex;align-items:center;gap:10px}
+    .bar button{all:unset;display:inline-flex;align-items:center;gap:6px;cursor:pointer;min-height:44px;
+      padding:0 16px;border-radius:var(--r-pill);font-family:var(--gx-font-display);font-weight:600;font-size:var(--fs-md);
+      color:var(--gx-text);background:var(--gx-surface-2);border:1px solid var(--gx-line-2)}
+    .bar button.on{background:linear-gradient(135deg,var(--gx-warn),#ff7a6c);color:#0b0d14;border-color:transparent;font-weight:700}
     .bar button:active{transform:translateY(1px)}
-    .hint{color:#7d8493;font-size:.8rem;text-align:center;max-width:min(94vw,460px)}
-    .over{position:fixed;inset:0;display:none;place-items:center;background:rgba(8,9,13,.84);z-index:3;text-align:center}
-    .over.show{display:grid} .over .card{padding:26px 34px;border-radius:18px;
-      background:linear-gradient(180deg,#181b27,#101218);border:1px solid #2a2f42;box-shadow:0 20px 60px rgba(0,0,0,.6)}
-    .over h2{margin:0 0 10px;font-size:1.6rem} .over .row{margin:4px 0;color:#c7ccda} .over b{color:#fff}
-    .over .b2{color:#5ad1a8}
-    .over button{all:unset;margin-top:16px;color:#0e0f13;background:linear-gradient(180deg,#7d9bff,#6c8cff);
-      font-weight:700;padding:12px 26px;border-radius:12px;cursor:pointer}
   </style>
 </head>
-<body>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">💣 <b id="mineCount">0</b></span>
+    <span class="gx-pill">⏱ <b id="time">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
   <div class="wrap">
-    <div class="top"><a href="../../">← Puzzle</a>
-      <span class="mines">💣 <b id="mineCount">0</b></span>
-      <span class="best">Best: <b id="best">—</b></span>
-      <span class="time">⏱ <b id="time">0</b></span></div>
     <canvas id="c"></canvas>
     <div class="bar">
-      <button id="newBtn">🙂 New (R)</button>
-      <div class="flagmode">
-        <button id="flagBtn" aria-label="toggle flag mode">🚩 Flag</button>
-      </div>
+      <button id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> 🙂 New (R)</button>
+      <button id="flagBtn" aria-label="toggle flag mode">🚩 Flag</button>
     </div>
-    <div class="hint">tap reveal · long-press or 🚩 mode to flag · arrows/WASD move · Space reveal · F flag · R restart</div>
   </div>
-  <div class="over" id="over"><div class="card"><h2 id="overTitle">Game Over</h2>
-    <div class="row" id="overMsg">You hit a mine.</div>
-    <div class="row">Time <b id="finalTime">0</b>s</div>
-    <div class="row b2">Best <b id="finalBest">—</b></div>
-    <button id="again">Play again</button></div></div>
+
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> Tap reveal · long-press flag</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> Move · Space reveal · F flag · R restart</span>
+  </div>
+
+  <div class="gx-modal" id="over"><div class="gx-modal__card"><h2 class="gx-modal__title" id="overTitle">Game Over</h2>
+    <div class="gx-modal__row" id="overMsg">You hit a mine.</div>
+    <div class="gx-modal__row">Time <b id="finalTime">0</b>s</div>
+    <div class="gx-modal__row">Best <b id="finalBest">—</b></div>
+    <button class="gx-btn gx-btn--primary" id="again"><svg class="gx-ico"><use href="#i-restart"/></svg> Play again</button></div></div>
   <script type="module">
     import { onTap } from './touch.js';
     const COLS=9, ROWS=9, MINES=10;
@@ -87,7 +87,7 @@
       document.getElementById('time').textContent='0';
       document.getElementById('mineCount').textContent=MINES;
       document.getElementById('newBtn').textContent='🙂 New (R)';
-      document.getElementById('over').classList.remove('show'); fit(); requestAnimationFrame(loop); }
+      document.getElementById('over').classList.remove('gx-show'); fit(); requestAnimationFrame(loop); }
 
     function placeMines(sx,sy){ let placed=0;
       while(placed<MINES){ const x=Math.floor(rand()*COLS), y=Math.floor(rand()*ROWS);
@@ -140,7 +140,7 @@
       document.getElementById('overMsg').textContent=victory?'You found all the mines.':'You hit a mine.';
       document.getElementById('finalTime').textContent=time;
       document.getElementById('finalBest').textContent=best?best+'s':'—';
-      document.getElementById('over').classList.add('show'); }
+      document.getElementById('over').classList.add('gx-show'); }
 
     function burstMine(x,y){ for(let i=0;i<16;i++){ const a=rand()*Math.PI*2,s=1+rand()*4.5;
       parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#ff7a6c'}); } }

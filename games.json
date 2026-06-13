@@ -3,6 +3,17 @@
   "title": "Puzzle",
   "games": [
     {
+      "slug": "2048",
+      "title": "2048",
+      "path": "games/2048/",
+      "icon": "🔢",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": ["swipe", "numbers", "merge"],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
       "slug": "minesweeper",
       "title": "Minesweeper",
       "path": "games/minesweeper/",
@@ -21,16 +32,6 @@
       "tags": ["swipe", "blocks"],
       "license": "MIT",
       "credit": "Gamf · classic Tetris design"
-    },
-    {
-      "slug": "sample-2048",
-      "title": "2048",
-      "path": "games/sample-2048/",
-      "icon": "🔢",
-      "dims": "2D",
-      "tags": ["swipe", "numbers"],
-      "license": "MIT",
-      "credit": "Gamf sample"
     }
   ]
 }
