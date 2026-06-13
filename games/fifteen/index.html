@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>15 Puzzle — Gamf</title>
+  <meta name="description" content="The classic 4x4 sliding-tile puzzle. Slide tiles into the gap to order 1–15. Always solvable, touch-first, fewest moves wins.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: #6c8cff; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
+    canvas { border-radius: var(--r-5); touch-action: none; display: block;
+      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.04); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-amber) 18%, var(--gx-screen)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Moves <b id="moves">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-target"/></svg> Tap / swipe a tile</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-arcade"/></svg> Arrows · WASD</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> New (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Solved!</h2>
+      <div class="gx-modal__row">Moves <b id="finalMoves">0</b></div>
+      <div class="gx-modal__row">Best (fewest) <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New puzzle</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap, onSwipe } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-fifteen-best';   // fewest moves to solve (lower = better)
+    const N = 4;                                   // classic 4x4
+    const BLANK = N * N - 1;                        // value 15 (0-indexed) = the gap
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const movesEl     = document.getElementById('moves');
+    const bestEl      = document.getElementById('best');
+    const overEl      = document.getElementById('over');
+    const overTitleEl = document.getElementById('overTitle');
+    const finalMovesEl= document.getElementById('finalMoves');
+    const finalBestEl = document.getElementById('finalBest');
+    const newBestEl   = document.getElementById('newBest');
+    const againLabelEl= document.getElementById('againLabel');
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x5fa17e15;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ---- state ----
+    // board[i] holds the tile value (0..14) or BLANK at grid index i (row-major).
+    let board, blankIdx, moves, best, won, paused;
+    let cursor = 0;            // keyboard cursor index (a tile to slide)
+    let anim = null;           // {val, fromIdx, toIdx, t}  sliding animation
+    let parts = [];            // win particle bursts
+    let rafPending = false, lastNow = 0;
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    // ---- layout ----
+    let size = 400, cell = 90, pad = 16, dpr = 1;
+    function fit(){
+      size = Math.max(240, Math.min(innerWidth * 0.92, 460, innerHeight - 210));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = size * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pad = size * 0.04; cell = (size - pad * 2) / N;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    function cellXY(i){ const x = i % N, y = (i / N) | 0; return [pad + x * cell, pad + y * cell]; }
+
+    // ---- generation: scramble by random legal slides from the solved state.
+    //      Only legal moves are applied, so the board is ALWAYS solvable. ----
+    function neighborsOfBlank(bi){
+      const x = bi % N, y = (bi / N) | 0, out = [];
+      if(x > 0) out.push(bi - 1);
+      if(x < N - 1) out.push(bi + 1);
+      if(y > 0) out.push(bi - N);
+      if(y < N - 1) out.push(bi + N);
+      return out;
+    }
+
+    function isSolved(){
+      for(let i = 0; i < N * N; i++) if(board[i] !== i) return false;
+      return true;
+    }
+
+    function shuffle(){
+      // start solved: board[i] = i  (BLANK sits at last index)
+      board = Array.from({length: N * N}, (_, i) => i);
+      blankIdx = BLANK;
+      let prev = -1;
+      const steps = 250;          // plenty of legal slides for a thorough scramble
+      for(let s = 0; s < steps; s++){
+        const opts = neighborsOfBlank(blankIdx).filter(i => i !== prev);
+        const pick = opts[randInt(opts.length)];
+        // slide the tile at `pick` into the blank
+        board[blankIdx] = board[pick];
+        board[pick] = BLANK;
+        prev = blankIdx;
+        blankIdx = pick;
+      }
+      // never hand the player an already-solved board
+      if(isSolved()){
+        const opts = neighborsOfBlank(blankIdx);
+        const pick = opts[randInt(opts.length)];
+        board[blankIdx] = board[pick]; board[pick] = BLANK; blankIdx = pick;
+      }
+    }
+
+    // ---- core action: try to slide the tile at index `i` into the gap ----
+    function slide(i){
+      if(paused || won || anim || i < 0 || i >= N * N || i === blankIdx) return false;
+      // tile must be orthogonally adjacent to the blank
+      if(!neighborsOfBlank(blankIdx).includes(i)) return false;
+      const val = board[i];
+      anim = { val, fromIdx: i, toIdx: blankIdx, t: 0 };
+      // commit board state immediately; animation only drives the visual
+      board[blankIdx] = val;
+      board[i] = BLANK;
+      blankIdx = i;
+      cursor = i;
+      moves++;
+      movesEl.textContent = moves;
+      requestFrame();
+      return true;
+    }
+
+    // Slide the tile that lies in a given direction from the blank.
+    // dir is where the TILE travels toward the gap, i.e. opposite of the gap offset.
+    function slideDir(dir){
+      const x = blankIdx % N, y = (blankIdx / N) | 0;
+      let tx = x, ty = y;
+      if(dir === 'left')  tx = x + 1;   // tile to the right slides left into gap
+      if(dir === 'right') tx = x - 1;   // tile to the left slides right into gap
+      if(dir === 'up')    ty = y + 1;   // tile below slides up into gap
+      if(dir === 'down')  ty = y - 1;   // tile above slides down into gap
+      if(tx < 0 || tx >= N || ty < 0 || ty >= N) return;
+      slide(ty * N + tx);
+    }
+
+    function checkWin(){
+      if(isSolved()) win();
+    }
+
+    function win(){
+      won = true;
+      for(let i = 0; i < N * N; i++) burst(i);
+      let isBest = false;
+      if(best === 0 || moves < best){ best = moves; localStorage.setItem(BEST_KEY, best); isBest = true; }
+      bestEl.textContent = best > 0 ? best : '—';
+      overTitleEl.textContent = 'Solved!';
+      finalMovesEl.textContent = moves;
+      finalBestEl.textContent = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best — fewest moves!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 520);
+    }
+
+    function burst(i){
+      const [px, py] = cellXY(i);
+      const cx = px + cell / 2, cy = py + cell / 2;
+      const cols = ['#e8a23a', '#d8412b', '#6c8cff', '#f4ede1'];
+      const col = cols[i % cols.length];
+      const count = 8;
+      for(let k = 0; k < count; k++){
+        const a = (k / count) * Math.PI * 2 + rand() * 0.6;
+        const s = 1.2 + rand() * 2.6;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, c: col });
+      }
+    }
+
+    // ---- session control ----
+    function startGame(){
+      moves = 0; won = false; paused = false;
+      movesEl.textContent = moves;
+      cursor = 0;
+      anim = null;
+      parts = [];
+      overEl.classList.remove('gx-show');
+      fit();
+      shuffle();
+      if(cursor === blankIdx) cursor = blankIdx === 0 ? 1 : 0;
+      requestFrame();
+    }
+    function reset(){ startGame(); }
+
+    function togglePause(){
+      if(won) return;
+      paused = !paused;
+      requestFrame();
+    }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+      if(anim){
+        anim.t += dt * 7.5;                 // ~0.13s per slide
+        if(anim.t >= 1){ anim = null; checkWin(); }
+        else active = true;
+      }
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 2.0; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+      render();
+      if(active) requestFrame();
+    }
+
+    // ---- rendering ----
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    function easeOut(t){ return 1 - Math.pow(1 - t, 3); }
+
+    function drawTile(val, px, py){
+      const m = cell * 0.06;
+      const x = px + m, y = py + m, w = cell - m * 2, h = cell - m * 2, r = cell * 0.16;
+      // body gradient — warm amber/blue arcade face
+      const grad = ctx.createLinearGradient(x, y, x, y + h);
+      grad.addColorStop(0, '#2a2018');
+      grad.addColorStop(1, '#1b1410');
+      // socket / drop shadow
+      ctx.fillStyle = '#0a0806';
+      roundRect(x + 2, y + 3, w, h, r); ctx.fill();
+      ctx.fillStyle = grad;
+      roundRect(x, y, w, h, r); ctx.fill();
+      // amber edge
+      ctx.strokeStyle = '#e8a23a';
+      ctx.lineWidth = Math.max(1.5, cell * 0.018);
+      roundRect(x + 1, y + 1, w - 2, h - 2, r - 1); ctx.stroke();
+      // top gloss
+      ctx.fillStyle = 'rgba(244,237,225,0.08)';
+      roundRect(x + w * 0.10, y + h * 0.08, w * 0.80, h * 0.24, r * 0.6); ctx.fill();
+      // number
+      ctx.fillStyle = '#f4ede1';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '400 ' + Math.floor(cell * 0.42) + "px 'Anton', sans-serif";
+      ctx.fillText(String(val + 1), x + w / 2, y + h / 2 + cell * 0.02);
+    }
+
+    function render(){
+      // board frame
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#15110e');
+      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1;
+      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.05); ctx.stroke();
+
+      // empty wells
+      for(let i = 0; i < N * N; i++){
+        const [px, py] = cellXY(i);
+        const m = cell * 0.06;
+        ctx.fillStyle = '#100c09';
+        roundRect(px + m, py + m, cell - m * 2, cell - m * 2, cell * 0.16); ctx.fill();
+      }
+
+      // tiles (skip blank and the animating tile's static draw)
+      for(let i = 0; i < N * N; i++){
+        const val = board[i];
+        if(val === BLANK) continue;
+        if(anim && i === anim.toIdx) continue;   // drawn separately, in motion
+        const [px, py] = cellXY(i);
+        drawTile(val, px, py);
+        // keyboard cursor highlight
+        if(i === cursor && !won && !paused){
+          const m = cell * 0.06;
+          ctx.strokeStyle = '#6c8cff';
+          ctx.lineWidth = Math.max(2, cell * 0.04);
+          roundRect(px + m, py + m, cell - m * 2, cell - m * 2, cell * 0.16); ctx.stroke();
+        }
+      }
+
+      // animating tile, interpolated from old slot toward its new slot
+      if(anim){
+        const [fx, fy] = cellXY(anim.fromIdx);
+        const [tx, ty] = cellXY(anim.toIdx);
+        const e = easeOut(Math.min(1, anim.t));
+        const px = fx + (tx - fx) * e, py = fy + (ty - fy) * e;
+        drawTile(anim.val, px, py);
+      }
+
+      // particles
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+
+      // pause veil
+      if(paused){
+        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '400 ' + Math.floor(size * 0.11) + "px 'Anton', sans-serif";
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    // ---- input: tap a tile to slide it ----
+    onTap(canvas, (clientX, clientY) => {
+      if(paused || won || anim) return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      const x = Math.floor((lx - pad) / cell), y = Math.floor((ly - pad) / cell);
+      if(x < 0 || x >= N || y < 0 || y >= N) return;
+      slide(y * N + x);
+    });
+
+    // ---- input: swipe slides the tile from the swipe direction into the gap ----
+    onSwipe(canvas, (dir) => {
+      if(paused || won || anim) return;
+      // a swipe 'left' means the player pushes a tile leftward into the gap
+      slideDir(dir);
+    });
+
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => {
+      if(won) startGame();
+      else overEl.classList.remove('gx-show');
+    };
+
+    // ---- keyboard ----
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); slideDir('left'); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); slideDir('right'); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); slideDir('up'); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); slideDir('down'); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(won) startGame();
+        else if(!paused) slide(cursor);
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    // ---- boot ----
+    startGame();
+  </script>
+</body>
+</html>

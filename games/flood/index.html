@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Flood It — Gamf</title>
+  <meta name="description" content="Flood the whole board to a single color in the fewest moves. Pick a color, watch it spread from the corner — a touch-first take on the classic Flood It puzzle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: var(--gx-red); }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: calc(env(safe-area-inset-top) + 56px) 14px calc(env(safe-area-inset-bottom) + 150px); }
+    .wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    canvas { border-radius: var(--r-5); touch-action: none; display: block;
+      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.04); }
+
+    /* color picker row */
+    .palette { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; pointer-events: auto; }
+    .swatch { position: relative; width: 46px; height: 46px; border-radius: var(--r-4);
+      border: 2px solid var(--gx-line-2); cursor: pointer; padding: 0; outline: none;
+      box-shadow: 3px 3px 0 var(--gx-ink); transition: transform .1s ease, box-shadow .1s ease, border-color .1s ease; }
+    .swatch:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--gx-ink); }
+    .swatch:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--gx-ink); }
+    .swatch.is-cursor { border-color: var(--gx-text); }
+    .swatch.is-cursor::after { content: ""; position: absolute; inset: 4px; border-radius: var(--r-3);
+      border: 2px solid rgba(255,255,255,.55); }
+    .swatch__k { position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%);
+      font-family: var(--gx-font-mono); font-size: 10px; font-weight: 700; color: rgba(0,0,0,.6); pointer-events: none; }
+
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-screen)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- For 3D games this import map maps "three"; kept per portal spec. -->
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Moves <b id="moves">0</b><span id="movesCap" style="color:var(--gx-text-3)">/25</span></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage">
+    <div class="wrap">
+      <canvas id="c"></canvas>
+      <div class="palette" id="palette"></div>
+    </div>
+  </div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-touch"/></svg> Tap a color</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-keyboard"/></svg> ←/→ · 1–6 · Space</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> New (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / lose / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Flooded!</h2>
+      <div class="gx-modal__row">Result <b id="finalResult">—</b></div>
+      <div class="gx-modal__row">Moves <b id="finalMoves">0</b></div>
+      <div class="gx-modal__row">Best (fewest) <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New board</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-flood-best';   // fewest moves to flood the board (lower = better)
+    const N = 12;                                // board is N x N cells
+    const NCOLORS = 6;                           // number of colors in the palette
+    const MOVE_CAP = 30;                         // generous move budget; fail if exceeded without filling
+
+    // Arcade-tinted palette: red + amber accents over warm neutrals, plus a few
+    // distinct hues that still read on the warm-black canvas.
+    const COLORS = [
+      '#d8412b', // red
+      '#e8a23a', // amber
+      '#4fb286', // green
+      '#3d8bd8', // blue
+      '#9a6cc4', // violet
+      '#f4ede1', // bone
+    ];
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const movesEl   = document.getElementById('moves');
+    const movesCapEl= document.getElementById('movesCap');
+    const bestEl    = document.getElementById('best');
+    const overEl    = document.getElementById('over');
+    const overTitleEl  = document.getElementById('overTitle');
+    const finalResultEl= document.getElementById('finalResult');
+    const finalMovesEl = document.getElementById('finalMoves');
+    const finalBestEl  = document.getElementById('finalBest');
+    const newBestEl    = document.getElementById('newBest');
+    const againLabelEl = document.getElementById('againLabel');
+    const paletteEl    = document.getElementById('palette');
+
+    movesCapEl.textContent = '/' + MOVE_CAP;
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x5f3a91c7;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ---- state ----
+    let grid;                  // Uint8Array length N*N, color index per cell
+    let target;                // current flood color (color of the top-left region)
+    let moves, best, done, won, paused;
+    let cursor = 0;            // keyboard cursor into the palette
+    let cells;                 // per-cell render state { c: displayed color, t: target color, p: progress 0..1, dist }
+    let parts = [];            // particle bursts
+    let rafPending = false, lastNow = 0;
+    let waveT = 0;             // global animation clock for the flood wave
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    // ---- layout ----
+    let size = 420, cell = 30, pad = 14, dpr = 1;
+    function fit(){
+      size = Math.max(240, Math.min(innerWidth * 0.92, 460, innerHeight - 300));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = size * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pad = size * 0.035; cell = (size - pad * 2) / N;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    function cellXY(i){ const x = i % N, y = (i / N) | 0; return [pad + x * cell, pad + y * cell]; }
+
+    // ---- board generation ----
+    function newBoard(){
+      grid = new Uint8Array(N * N);
+      for(let i = 0; i < N * N; i++) grid[i] = randInt(NCOLORS);
+      target = grid[0];
+      cells = Array.from({ length: N * N }, (_, i) => ({ c: grid[i], t: grid[i], p: 1, dist: 0 }));
+    }
+
+    // BFS over the connected top-left region of the current target color.
+    // Returns array of cell indices in the region, with BFS distance for the wave.
+    function regionOfColor(color){
+      const seen = new Uint8Array(N * N);
+      const dist = new Int16Array(N * N).fill(-1);
+      const region = [];
+      const q = [0];
+      seen[0] = 1; dist[0] = 0;
+      while(q.length){
+        const i = q.shift();
+        if(grid[i] !== color) continue;       // only flow through matching cells
+        region.push(i);
+        const x = i % N, y = (i / N) | 0;
+        const nb = [];
+        if(x > 0) nb.push(i - 1);
+        if(x < N - 1) nb.push(i + 1);
+        if(y > 0) nb.push(i - N);
+        if(y < N - 1) nb.push(i + N);
+        for(const j of nb){
+          if(!seen[j] && grid[j] === color){ seen[j] = 1; dist[j] = dist[i] + 1; q.push(j); }
+        }
+      }
+      return { region, dist };
+    }
+
+    // ---- core action: pick a color ----
+    function pick(color){
+      if(paused || done) return;
+      if(color === target) return;            // picking the same color is a no-op (no wasted move)
+
+      // the flooded region is everything connected to (0,0) of the current target color
+      const { region, dist } = regionOfColor(target);
+      let maxD = 0;
+      for(const i of region) if(dist[i] > maxD) maxD = dist[i];
+
+      // recolor the whole region; animate a wave from the corner outward
+      for(const i of region){
+        grid[i] = color;
+        const c = cells[i];
+        c.t = color;
+        c.p = 0;                              // animate from old color to new
+        c.dist = dist[i];                     // wave delay by BFS distance
+      }
+      target = color;
+      moves++;
+      movesEl.textContent = moves;
+      burstRegion(region, color);
+
+      requestFrame();
+
+      // check end conditions
+      const region2 = regionOfColor(color).region;
+      if(region2.length === N * N){ finish(true); }
+      else if(moves >= MOVE_CAP){ finish(false); }
+    }
+
+    function burstRegion(region, color){
+      // small celebratory sparks along the leading edge of the flood
+      const col = color;
+      const sample = Math.min(region.length, 18);
+      for(let k = 0; k < sample; k++){
+        const i = region[randInt(region.length)];
+        const [px, py] = cellXY(i);
+        const cx = px + cell / 2, cy = py + cell / 2;
+        const a = rand() * Math.PI * 2;
+        const s = 0.6 + rand() * 1.8;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, c: col });
+      }
+    }
+
+    // ---- end of game ----
+    function finish(isWin){
+      done = true; won = isWin;
+      if(isWin){
+        // big celebratory burst
+        for(let k = 0; k < 40; k++){
+          const i = randInt(N * N);
+          const [px, py] = cellXY(i);
+          parts.push({ x: px + cell/2, y: py + cell/2,
+            vx: (rand()-0.5)*5, vy: (rand()-0.5)*5, life: 1, c: COLORS[randInt(NCOLORS)] });
+        }
+      }
+      let isBest = false;
+      if(isWin && (best === 0 || moves < best)){
+        best = moves; localStorage.setItem(BEST_KEY, String(best)); isBest = true;
+      }
+      bestEl.textContent = best > 0 ? best : '—';
+
+      overTitleEl.textContent = isWin ? 'Flooded!' : 'Out of moves';
+      finalResultEl.textContent = isWin ? 'Cleared' : 'Failed';
+      finalMovesEl.textContent  = moves;
+      finalBestEl.textContent   = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best — fewest moves!' : '';
+      againLabelEl.textContent = 'New board';
+
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), isWin ? 520 : 300);
+    }
+
+    // ---- new game ----
+    function startGame(){
+      moves = 0; done = false; won = false; paused = false;
+      cursor = 0;
+      parts = [];
+      movesEl.textContent = moves;
+      overEl.classList.remove('gx-show');
+      fit();
+      newBoard();
+      syncSwatches();
+      requestFrame();
+    }
+
+    function reset(){
+      // advance the seed so each "new board" differs, but stays deterministic across the session
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      startGame();
+    }
+
+    // ---- palette UI ----
+    function buildSwatches(){
+      paletteEl.innerHTML = '';
+      for(let k = 0; k < NCOLORS; k++){
+        const b = document.createElement('button');
+        b.className = 'swatch';
+        b.style.background = COLORS[k];
+        b.dataset.k = k;
+        b.setAttribute('aria-label', 'Color ' + (k + 1));
+        const lbl = document.createElement('span');
+        lbl.className = 'swatch__k';
+        lbl.textContent = (k + 1);
+        b.appendChild(lbl);
+        b.addEventListener('click', () => { cursor = k; pick(k); syncSwatches(); });
+        paletteEl.appendChild(b);
+      }
+    }
+    function syncSwatches(){
+      const kids = paletteEl.children;
+      for(let k = 0; k < kids.length; k++){
+        kids[k].classList.toggle('is-cursor', k === cursor);
+      }
+    }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      waveT += dt;
+      let active = false;
+
+      // advance per-cell flood progress; wave is staggered by BFS distance
+      const speed = 4.2;          // progress units / sec
+      const waveStep = 0.045;     // seconds of delay per ring of distance
+      for(let i = 0; i < N * N; i++){
+        const c = cells[i];
+        if(c.p < 1){
+          // hold until this ring's turn, then ease to the new color
+          c.hold = (c.hold || 0) + dt;
+          if(c.hold >= c.dist * waveStep){
+            c.p = Math.min(1, c.p + dt * speed);
+          }
+          active = true;
+        } else {
+          c.c = c.t; c.hold = 0;
+        }
+      }
+      // particles
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.10; p.life -= dt * 1.8; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+
+      render();
+      if(active) requestFrame();
+    }
+
+    // ---- rendering ----
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    function hexToRgb(h){
+      h = h.replace('#', '');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+    function lerpRgb(a, b, t){
+      const pa = hexToRgb(a), pb = hexToRgb(b);
+      const r = Math.round(pa[0] + (pb[0]-pa[0]) * t);
+      const g = Math.round(pa[1] + (pb[1]-pa[1]) * t);
+      const bl= Math.round(pa[2] + (pb[2]-pa[2]) * t);
+      return `rgb(${r},${g},${bl})`;
+    }
+
+    function drawCell(i){
+      const [px, py] = cellXY(i);
+      const m = cell * 0.06;
+      const x = px + m, y = py + m, w = cell - m*2, h = cell - m*2, r = Math.max(2, cell * 0.14);
+      const c = cells[i];
+
+      // color is interpolated old->new during the flood wave
+      const from = COLORS[c.c], to = COLORS[c.t];
+      const tprog = c.p < 1 ? c.p : 1;
+      const fill = (c.c === c.t) ? to : lerpRgb(from, to, tprog);
+
+      // body
+      ctx.fillStyle = fill;
+      roundRect(x, y, w, h, r); ctx.fill();
+
+      // subtle top gloss + bottom shade for depth
+      ctx.fillStyle = 'rgba(255,255,255,.12)';
+      roundRect(x + w*0.10, y + h*0.08, w*0.80, h*0.30, r*0.7); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.16)';
+      roundRect(x, y + h*0.62, w, h*0.38, r); ctx.fill();
+
+      // pulse highlight on the cells still resolving the wave
+      if(c.p < 1 && c.p > 0.02 && c.hold >= c.dist * 0.045){
+        ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 * (1 - c.p)) + ')';
+        ctx.lineWidth = Math.max(1, cell * 0.06);
+        roundRect(x, y, w, h, r); ctx.stroke();
+      }
+    }
+
+    function render(){
+      // board background panel
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#100c09');
+      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1;
+      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.045); ctx.stroke();
+
+      for(let i = 0; i < N * N; i++) drawCell(i);
+
+      // origin marker — the corner the flood spreads from
+      const [ox, oy] = cellXY(0);
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = 'rgba(244,237,225,.9)';
+      const dot = Math.max(3, cell * 0.16);
+      ctx.beginPath(); ctx.arc(ox + cell/2, oy + cell/2, dot, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.beginPath(); ctx.arc(ox + cell/2, oy + cell/2, dot * 0.45, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      // particles
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+
+      // pause veil
+      if(paused){
+        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const fam = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'sans-serif';
+        ctx.font = '400 ' + Math.floor(size * 0.12) + 'px ' + fam;
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    function togglePause(){
+      if(done) return;
+      paused = !paused;
+      requestFrame();
+    }
+
+    // ---- input: tap on canvas highlights the corner; real picking is via palette ----
+    onTap(canvas, () => { /* board taps do nothing — colors are chosen from the palette */ });
+
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = reset;
+
+    // ---- keyboard ----
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor(-1); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor(1); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor(-1); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); moveCursor(1); }
+      else if(k >= '1' && k <= String(NCOLORS)){
+        e.preventDefault();
+        if(done) return;
+        cursor = (+k) - 1; syncSwatches(); pick(cursor);
+      }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(done) reset();
+        else if(!paused) pick(cursor);
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    function moveCursor(d){
+      if(done || paused) return;
+      cursor = (cursor + d + NCOLORS) % NCOLORS;
+      syncSwatches();
+      requestFrame();
+    }
+
+    // ---- boot ----
+    buildSwatches();
+    startGame();
+  </script>
+</body>
+</html>

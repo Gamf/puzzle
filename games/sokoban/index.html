@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Sokoban — Gamf</title>
+  <meta name="description" content="Push every box onto a glowing target tile. Cozy crate-pushing puzzles that grow level by level, with full undo and a touch d-pad.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: #e8a23a; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: calc(env(safe-area-inset-top) + 56px) 14px calc(env(safe-area-inset-bottom) + 188px); }
+    canvas { border-radius: var(--r-5); touch-action: none; display: block;
+      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.04); }
+
+    /* on-screen d-pad */
+    .pad { position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom) + 58px); z-index: 5;
+      display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(3, 58px);
+      gap: 6px; pointer-events: none; }
+    .pad button { pointer-events: auto; -webkit-appearance: none; appearance: none;
+      display: grid; place-items: center; cursor: pointer; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-screen) 78%, transparent);
+      border: 1px solid var(--gx-line-2); border-radius: var(--r-4);
+      box-shadow: var(--sh-1); transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    .pad button .gx-ico { width: 26px; height: 26px; }
+    .pad button:active { transform: translateY(2px); box-shadow: 0 0 0 var(--gx-ink);
+      background: color-mix(in srgb, var(--gx-accent) 30%, var(--gx-screen)); border-color: var(--gx-accent); }
+    .pad .pu { grid-area: 1 / 2; } .pad .pl { grid-area: 2 / 1; }
+    .pad .pd { grid-area: 3 / 2; } .pad .pr { grid-area: 2 / 3; }
+    .pad .pc { grid-area: 2 / 2; color: var(--gx-amber); }
+    .pad .pc .gx-ico { width: 22px; height: 22px; }
+
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-accent) 20%, var(--gx-panel-2)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+
+    @media (max-height: 560px) { .stage { padding-bottom: calc(env(safe-area-inset-bottom) + 168px); } }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Lvl <b id="level">1</b></span>
+    <span class="gx-pill">Push <b id="pushes">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- On-screen d-pad -->
+  <div class="pad" id="pad">
+    <button class="pu" data-dir="up"    aria-label="Up"><svg class="gx-ico"><use href="#i-up"/></svg></button>
+    <button class="pl" data-dir="left"  aria-label="Left"><svg class="gx-ico"><use href="#i-left"/></svg></button>
+    <button class="pc" data-dir="undo"  aria-label="Undo"><svg class="gx-ico"><use href="#i-restart"/></svg></button>
+    <button class="pr" data-dir="right" aria-label="Right"><svg class="gx-ico"><use href="#i-right"/></svg></button>
+    <button class="pd" data-dir="down"  aria-label="Down"><svg class="gx-ico"><use href="#i-down"/></svg></button>
+  </div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-target"/></svg> Push boxes to targets</span>
+    <span class="gx-hint__chip as-btn" id="undoBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> Undo (Z)</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> Reset (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Solved!</h2>
+      <div class="gx-modal__row">Level <b id="finalLevel">1</b></div>
+      <div class="gx-modal__row">Pushes <b id="finalPushes">0</b></div>
+      <div class="gx-modal__row">Best level <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-sokoban-best';   // highest level cleared (higher = better)
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const levelEl  = document.getElementById('level');
+    const pushesEl = document.getElementById('pushes');
+    const bestEl   = document.getElementById('best');
+    const overEl   = document.getElementById('over');
+    const overTitleEl = document.getElementById('overTitle');
+    const finalLevelEl  = document.getElementById('finalLevel');
+    const finalPushesEl = document.getElementById('finalPushes');
+    const finalBestEl   = document.getElementById('finalBest');
+    const newBestEl  = document.getElementById('newBest');
+    const againLabelEl = document.getElementById('againLabel');
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x5ab07a11;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ---- tile constants ----
+    const WALL = 1, FLOOR = 0;
+    const DIRS = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+
+    // ---- state ----
+    let level = 1;
+    let W = 0, H = 0;               // grid dims (incl. wall border)
+    let walls;                     // Uint8Array W*H, 1 = wall
+    let targets;                   // Set of target indices
+    let boxes;                     // Set of box indices (mutable)
+    let px = 0, py = 0;            // player cell
+    let pushes = 0, won = false, paused = false;
+    let best = 0;
+    let history = [];             // undo stack of snapshots
+    let anim = { t: 0 };          // simple lerp for player/box slide
+    let prevState = null;          // for slide animation
+    let parts = [];               // win confetti
+    let rafPending = false, lastNow = 0;
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    const idx = (x, y) => y * W + x;
+    const ix = i => i % W, iy = i => (i / W) | 0;
+
+    // ---- layout ----
+    let size = 420, cell = 48, ox = 0, oy = 0, dpr = 1;
+    function fit(){
+      const availW = Math.min(innerWidth * 0.94, 480);
+      const availH = innerHeight - 56 - 188;     // hud + pad/hint
+      size = Math.max(220, Math.min(availW, availH, 480));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.round(size * dpr); canvas.height = Math.round(size * dpr);
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // square cells; centre the board inside the canvas
+      cell = Math.floor(Math.min(size / W, size / H));
+      ox = Math.floor((size - cell * W) / 2);
+      oy = Math.floor((size - cell * H) / 2);
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    // ---- level generation ----------------------------------------------------
+    // Build a solvable Sokoban by working BACKWARDS: place boxes on their goals
+    // (a solved board), then "pull" them out to scrambled start positions. Every
+    // pull is the reverse of a legal push, so the forward solution is guaranteed.
+    function genLevel(lvl){
+      // difficulty curve: grid + box count grow, capped
+      const inner = Math.min(4 + Math.floor((lvl - 1) / 2), 8);   // 4..8 inner cells
+      const nBoxes = Math.min(1 + Math.floor((lvl - 1) / 2), 5);  // 1..5 boxes
+      W = inner + 2; H = inner + 2;                                // + wall border
+      // re-seed per level so each level is fixed & reproducible
+      seed = (0x5ab07a11 ^ (lvl * 2654435761)) & 0x7fffffff;
+
+      let attempt = 0;
+      while(attempt++ < 60){
+        if(buildLevel(inner, nBoxes)) return;
+        seed = (seed * 16807 + lvl * 13) & 0x7fffffff;            // perturb & retry
+      }
+      // ultimate fallback: trivial 1-box room
+      buildTrivial();
+    }
+
+    function buildTrivial(){
+      W = 5; H = 5;
+      walls = new Uint8Array(W * H);
+      for(let x = 0; x < W; x++){ walls[idx(x,0)] = 1; walls[idx(x,H-1)] = 1; }
+      for(let y = 0; y < H; y++){ walls[idx(0,y)] = 1; walls[idx(W-1,y)] = 1; }
+      targets = new Set([idx(3,2)]);
+      boxes = new Set([idx(2,2)]);
+      px = 1; py = 2;
+    }
+
+    function buildLevel(inner, nBoxes){
+      walls = new Uint8Array(W * H);
+      // outer border walls
+      for(let x = 0; x < W; x++){ walls[idx(x,0)] = 1; walls[idx(x,H-1)] = 1; }
+      for(let y = 0; y < H; y++){ walls[idx(0,y)] = 1; walls[idx(W-1,y)] = 1; }
+      // sprinkle a few interior walls for flavour (keep them sparse & away from edges)
+      const interiorWalls = Math.min(Math.floor(inner * inner * 0.10), 6);
+      let placed = 0, guard = 0;
+      while(placed < interiorWalls && guard++ < 80){
+        const x = 1 + randInt(inner), y = 1 + randInt(inner);
+        const i = idx(x, y);
+        if(walls[i]) continue;
+        walls[i] = 1;
+        if(!floodReachable()){ walls[i] = 0; continue; }   // never split the room
+        placed++;
+      }
+
+      // collect free floor cells
+      const free = [];
+      for(let y = 1; y <= inner; y++) for(let x = 1; x <= inner; x++)
+        if(!walls[idx(x,y)]) free.push(idx(x,y));
+      if(free.length < nBoxes + 2) return false;
+
+      // ---- choose target cells = the SOLVED positions of the boxes ----
+      targets = new Set();
+      const goalArr = [];
+      let g = 0;
+      const shuffled = shuffle(free.slice());
+      for(const c of shuffled){
+        if(goalArr.length >= nBoxes) break;
+        // avoid corners as goals occasionally is fine; corners are valid rest spots
+        targets.add(c); goalArr.push(c); g++;
+      }
+      if(goalArr.length < nBoxes) return false;
+
+      // place player on a free cell not occupied by a box-on-goal
+      let playerCell = -1;
+      for(const c of shuffle(free.slice())){ if(!targets.has(c)){ playerCell = c; break; } }
+      if(playerCell < 0) playerCell = free[0];
+
+      // boxes begin on goals (solved), then we pull them away
+      boxes = new Set(goalArr);
+      px = ix(playerCell); py = iy(playerCell);
+
+      // ---- pull boxes backwards to scramble ----
+      const pulls = 8 + inner * 2 + nBoxes * 3;   // more pulls => more scrambled
+      let totalMoved = 0;
+      for(let step = 0; step < pulls; step++){
+        // pick a random box and try to pull it one cell
+        const bxs = Array.from(boxes);
+        const b = bxs[randInt(bxs.length)];
+        const bx = ix(b), by = iy(b);
+        // to PULL a box: player stands adjacent on one side, box moves toward
+        // player, player steps back one more — so two cells beyond box must be free.
+        const order = shuffle([[1,0],[-1,0],[0,1],[0,-1]]);
+        for(const [dx, dy] of order){
+          const standX = bx + dx, standY = by + dy;            // player current side
+          const stand2X = bx + dx*2, stand2Y = by + dy*2;       // player steps to here
+          const sIdx = idx(standX, standY), s2Idx = idx(stand2X, stand2Y);
+          if(!inBounds(standX, standY) || !inBounds(stand2X, stand2Y)) continue;
+          if(walls[sIdx] || walls[s2Idx]) continue;
+          if(boxes.has(sIdx) || boxes.has(s2Idx)) continue;
+          // player must be able to reach `stand` from current position (boxes block)
+          if(!playerCanReach(standX, standY)) continue;
+          // perform pull: box -> stand, player -> stand2
+          boxes.delete(b); boxes.add(sIdx);
+          px = stand2X; py = stand2Y;
+          totalMoved++;
+          break;
+        }
+      }
+
+      // reject degenerate scrambles where nothing moved / already solved
+      if(totalMoved < nBoxes) return false;
+      let solved = true;
+      for(const b of boxes) if(!targets.has(b)) solved = false;
+      if(solved) return false;
+      return true;
+    }
+
+    function inBounds(x, y){ return x > 0 && y > 0 && x < W - 1 && y < H - 1; }
+
+    // flood from player ignoring boxes -> is every floor cell reachable? (no walled-off islands)
+    function floodReachable(){
+      const seen = new Uint8Array(W * H);
+      // start from first non-wall interior cell
+      let start = -1;
+      for(let i = 0; i < W * H && start < 0; i++) if(!walls[i]) start = i;
+      if(start < 0) return false;
+      const stack = [start]; seen[start] = 1; let count = 1;
+      while(stack.length){
+        const c = stack.pop(), cx = ix(c), cy = iy(c);
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const nx = cx+dx, ny = cy+dy, ni = idx(nx,ny);
+          if(nx<0||ny<0||nx>=W||ny>=H||walls[ni]||seen[ni]) continue;
+          seen[ni] = 1; count++; stack.push(ni);
+        }
+      }
+      let floor = 0;
+      for(let i = 0; i < W*H; i++) if(!walls[i]) floor++;
+      return count === floor;
+    }
+
+    // BFS: can the player reach (tx,ty) from current px,py with current boxes as obstacles?
+    function playerCanReach(tx, ty){
+      if(px === tx && py === ty) return true;
+      const seen = new Uint8Array(W * H);
+      const start = idx(px, py); seen[start] = 1;
+      const q = [start];
+      while(q.length){
+        const c = q.shift(), cx = ix(c), cy = iy(c);
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const nx = cx+dx, ny = cy+dy, ni = idx(nx,ny);
+          if(nx<0||ny<0||nx>=W||ny>=H||walls[ni]||boxes.has(ni)||seen[ni]) continue;
+          if(nx === tx && ny === ty) return true;
+          seen[ni] = 1; q.push(ni);
+        }
+      }
+      return false;
+    }
+
+    function shuffle(a){
+      for(let i = a.length - 1; i > 0; i--){ const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    }
+
+    // ---- snapshots for undo ----
+    function snapshot(){ return { px, py, boxes: new Set(boxes), pushes }; }
+    function restore(s){ px = s.px; py = s.py; boxes = new Set(s.boxes); pushes = s.pushes; }
+
+    // ---- movement ----
+    function move(dirKey){
+      if(paused || won) return;
+      const d = DIRS[dirKey]; if(!d) return;
+      const nx = px + d[0], ny = py + d[1], ni = idx(nx, ny);
+      if(nx < 0 || ny < 0 || nx >= W || ny >= H || walls[ni]) return;   // wall
+      let pushed = false;
+      if(boxes.has(ni)){
+        // try to push the box one further
+        const bx = nx + d[0], by = ny + d[1], bi = idx(bx, by);
+        if(bx < 0 || by < 0 || bx >= W || by >= H || walls[bi] || boxes.has(bi)) return; // blocked
+        // commit push
+        history.push(snapshot());
+        prevState = { px, py, boxes: new Set(boxes) };
+        boxes.delete(ni); boxes.add(bi);
+        px = nx; py = ny;
+        pushes++; pushed = true;
+      } else {
+        history.push(snapshot());
+        prevState = { px, py, boxes: new Set(boxes) };
+        px = nx; py = ny;
+      }
+      pushesEl.textContent = pushes;
+      anim.t = 0; requestFrame();
+      if(isSolved()) win();
+    }
+
+    function isSolved(){
+      for(const b of boxes) if(!targets.has(b)) return false;
+      return boxes.size > 0;
+    }
+
+    function undo(){
+      if(paused || won || history.length === 0) return;
+      restore(history.pop());
+      pushesEl.textContent = pushes;
+      prevState = null; anim.t = 1;
+      requestFrame();
+    }
+
+    // ---- win / progress ----
+    function win(){
+      won = true;
+      // confetti from each target
+      for(const t of targets){
+        const cx = ox + ix(t) * cell + cell/2, cy = oy + iy(t) * cell + cell/2;
+        for(let k = 0; k < 10; k++){
+          const a = (k / 10) * Math.PI * 2 + rand() * 0.6;
+          const s = 1.4 + rand() * 2.8;
+          parts.push({ x: cx, y: cy, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 1.5,
+                       life: 1, c: rand() > 0.5 ? '#e8a23a' : '#d8412b' });
+        }
+      }
+      let isBest = false;
+      if(level > best){ best = level; localStorage.setItem(BEST_KEY, best); isBest = true; }
+      bestEl.textContent = best > 0 ? best : '—';
+      overTitleEl.textContent = 'Solved!';
+      againLabelEl.textContent = 'Next level';
+      finalLevelEl.textContent = level;
+      finalPushesEl.textContent = pushes;
+      finalBestEl.textContent = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best — level ' + best + '!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 520);
+    }
+
+    function nextLevel(){ level++; startLevel(); }
+
+    function startLevel(){
+      pushes = 0; won = false; paused = false;
+      history = []; prevState = null; parts = []; anim.t = 1;
+      levelEl.textContent = level;
+      pushesEl.textContent = pushes;
+      overEl.classList.remove('gx-show');
+      genLevel(level);
+      fit();
+      requestFrame();
+    }
+
+    function reset(){ startLevel(); }                // R: regenerate current level fresh
+    function fullReset(){ level = 1; startLevel(); }
+
+    function togglePause(){ if(won) return; paused = !paused; requestFrame(); }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+      if(anim.t < 1){ anim.t = Math.min(1, anim.t + dt * 11); active = true; }
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 1.6; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+      render();
+      if(active) requestFrame();
+    }
+
+    // ---- rendering ----
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    const ease = t => t * t * (3 - 2 * t);
+
+    function render(){
+      ctx.clearRect(0, 0, size, size);
+      // outer screen backdrop
+      ctx.fillStyle = '#15110e';
+      roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+
+      const t = ease(anim.t);
+      const ppx = prevState ? prevState.px : px;
+      const ppy = prevState ? prevState.py : py;
+
+      // floor + walls
+      for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){
+        const i = idx(x, y);
+        const cx = ox + x * cell, cy = oy + y * cell;
+        if(walls[i]){ drawWall(cx, cy); }
+        else { drawFloor(cx, cy); }
+      }
+      // targets (under boxes)
+      for(const t2 of targets) drawTarget(ox + ix(t2) * cell, oy + iy(t2) * cell);
+
+      // boxes — slide from previous position if it moved
+      const prevBoxes = prevState ? prevState.boxes : null;
+      // identify the single box that just moved (set difference)
+      let movedFrom = -1, movedTo = -1;
+      if(prevBoxes){
+        for(const b of boxes) if(!prevBoxes.has(b)) movedTo = b;
+        for(const b of prevBoxes) if(!boxes.has(b)) movedFrom = b;
+      }
+      for(const b of boxes){
+        let bx = ix(b), by = iy(b);
+        if(b === movedTo && movedFrom >= 0){
+          const fx = ix(movedFrom), fy = iy(movedFrom);
+          bx = fx + (ix(b) - fx) * t; by = fy + (iy(b) - fy) * t;
+        }
+        drawBox(ox + bx * cell, oy + by * cell, targets.has(b));
+      }
+
+      // player — slide from previous cell
+      const drawPx = ppx + (px - ppx) * t;
+      const drawPy = ppy + (py - ppy) * t;
+      drawPlayer(ox + drawPx * cell, oy + drawPy * cell);
+
+      // confetti
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c; ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5);
+      }
+      ctx.globalAlpha = 1;
+
+      // pause veil
+      if(paused){
+        ctx.fillStyle = 'rgba(10,8,6,.74)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '400 ' + Math.floor(size * 0.12) + "px 'Anton', sans-serif";
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    function drawFloor(x, y){
+      const gx = Math.round((x - ox) / cell), gy = Math.round((y - oy) / cell);
+      ctx.fillStyle = ((gx + gy) & 1) ? '#221a13' : '#1d1610';
+      ctx.fillRect(x, y, cell, cell);
+      ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+    }
+    function drawWall(x, y){
+      const p = cell * 0.04;
+      ctx.fillStyle = '#3a2c20';
+      roundRect(x + p, y + p, cell - p*2, cell - p*2, cell * 0.12); ctx.fill();
+      ctx.fillStyle = '#2a2018';
+      roundRect(x + p, y + cell*0.46, cell - p*2, cell*0.5 - p, cell * 0.1); ctx.fill();
+      // top highlight
+      ctx.fillStyle = 'rgba(244,237,225,.06)';
+      roundRect(x + p, y + p, cell - p*2, cell*0.22, cell * 0.1); ctx.fill();
+    }
+    function drawTarget(x, y){
+      const cx = x + cell/2, cy = y + cell/2, r = cell * 0.20;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(232,162,58,.85)'; ctx.lineWidth = Math.max(2, cell * 0.05);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = 'rgba(232,162,58,.18)';
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+    function drawBox(x, y, onTarget){
+      const m = cell * 0.12;
+      const bx = x + m, by = y + m, bw = cell - m*2, bh = cell - m*2, r = cell * 0.14;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = cell*0.12; ctx.shadowOffsetY = cell*0.05;
+      const grad = ctx.createLinearGradient(bx, by, bx, by + bh);
+      if(onTarget){ grad.addColorStop(0, '#f0b659'); grad.addColorStop(1, '#d8412b'); }
+      else        { grad.addColorStop(0, '#c98a4e'); grad.addColorStop(1, '#8a5a2e'); }
+      ctx.fillStyle = grad;
+      roundRect(bx, by, bw, bh, r); ctx.fill();
+      ctx.restore();
+      // crate cross-bracing
+      ctx.strokeStyle = onTarget ? 'rgba(27,15,12,.55)' : 'rgba(40,26,16,.7)';
+      ctx.lineWidth = Math.max(1.5, cell * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(bx, by); ctx.lineTo(bx + bw, by + bh);
+      ctx.moveTo(bx + bw, by); ctx.lineTo(bx, by + bh);
+      ctx.stroke();
+      roundRect(bx, by, bw, bh, r); ctx.stroke();
+      // gloss
+      ctx.fillStyle = 'rgba(244,237,225,.16)';
+      roundRect(bx + bw*0.14, by + bh*0.12, bw*0.72, bh*0.18, r*0.6); ctx.fill();
+    }
+    function drawPlayer(x, y){
+      const cx = x + cell/2, cy = y + cell/2;
+      const r = cell * 0.30;
+      ctx.save();
+      ctx.shadowColor = 'rgba(216,65,43,.5)'; ctx.shadowBlur = cell*0.18;
+      const grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.4, r*0.2, cx, cy, r);
+      grad.addColorStop(0, '#f4ede1'); grad.addColorStop(1, '#d8412b');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+      // eyes
+      ctx.fillStyle = '#1b0f0c';
+      ctx.beginPath(); ctx.arc(cx - r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
+    }
+
+    // ---- input: tap on board moves player toward the tapped cell (1 step) ----
+    onTap(canvas, (clientX, clientY) => {
+      if(paused || won) return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      const gx = Math.floor((lx - ox) / cell), gy = Math.floor((ly - oy) / cell);
+      const ddx = gx - px, ddy = gy - py;
+      if(Math.abs(ddx) + Math.abs(ddy) === 0) return;
+      if(Math.abs(ddx) >= Math.abs(ddy)) move(ddx > 0 ? 'right' : 'left');
+      else move(ddy > 0 ? 'down' : 'up');
+    });
+
+    // ---- d-pad ----
+    document.getElementById('pad').addEventListener('click', e => {
+      const btn = e.target.closest('button'); if(!btn) return;
+      const dir = btn.dataset.dir;
+      if(dir === 'undo') undo(); else move(dir);
+    });
+
+    document.getElementById('undoBtn').onclick = undo;
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => {
+      if(won) nextLevel();
+      else overEl.classList.remove('gx-show');
+    };
+
+    // ---- keyboard ----
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); move('left'); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); move('right'); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); move('up'); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); move('down'); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(won) nextLevel();
+      }
+      else if(k === 'z' || k === 'Z' || k === 'Backspace'){ e.preventDefault(); undo(); }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    // ---- boot ----
+    fullReset();
+  </script>
+</body>
+</html>

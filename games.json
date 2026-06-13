@@ -9,7 +9,11 @@
       "icon": "🔢",
       "color": "#6c8cff",
       "dims": "2D",
-      "tags": ["swipe", "numbers", "merge"],
+      "tags": [
+        "swipe",
+        "numbers",
+        "merge"
+      ],
       "license": "MIT",
       "credit": "Gamf original"
     },
@@ -19,7 +23,11 @@
       "path": "games/minesweeper/",
       "icon": "💣",
       "dims": "2D",
-      "tags": ["tap", "flag", "logic"],
+      "tags": [
+        "tap",
+        "flag",
+        "logic"
+      ],
       "license": "MIT",
       "credit": "Gamf · classic Minesweeper design"
     },
@@ -29,7 +37,10 @@
       "path": "games/tetris/",
       "icon": "🟪",
       "dims": "2D",
-      "tags": ["swipe", "blocks"],
+      "tags": [
+        "swipe",
+        "blocks"
+      ],
       "license": "MIT",
       "credit": "Gamf · classic Tetris design"
     },
@@ -40,7 +51,107 @@
       "icon": "💡",
       "color": "#ffcd4d",
       "dims": "2D",
-      "tags": ["tap", "logic", "toggle"],
+      "tags": [
+        "tap",
+        "logic",
+        "toggle"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "sokoban",
+      "title": "Sokoban",
+      "path": "games/sokoban/",
+      "icon": "📦",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "push",
+        "boxes",
+        "logic",
+        "retro"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "fifteen",
+      "title": "15 Puzzle",
+      "path": "games/fifteen/",
+      "icon": "🔢",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "sliding",
+        "tiles",
+        "classic",
+        "logic"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "flood",
+      "title": "Flood It",
+      "path": "games/flood/",
+      "icon": "🌊",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "flood",
+        "color",
+        "logic",
+        "casual"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "pipes",
+      "title": "Pipes",
+      "path": "games/pipes/",
+      "icon": "🪠",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "pipes",
+        "rotate",
+        "flow",
+        "connect"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "simon",
+      "title": "Simon",
+      "path": "games/simon/",
+      "icon": "🎵",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "memory",
+        "sequence",
+        "reflex",
+        "arcade"
+      ],
+      "license": "MIT",
+      "credit": "Gamf original"
+    },
+    {
+      "slug": "sudoku",
+      "title": "Mini Sudoku",
+      "path": "games/sudoku/",
+      "icon": "🔢",
+      "color": "#6c8cff",
+      "dims": "2D",
+      "tags": [
+        "sudoku",
+        "logic",
+        "numbers",
+        "grid"
+      ],
       "license": "MIT",
       "credit": "Gamf original"
     }

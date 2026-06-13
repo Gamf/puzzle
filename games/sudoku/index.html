@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Mini Sudoku — Gamf</title>
+  <meta name="description" content="A bite-size 6x6 Sudoku. Tap a cell, pick a number, and fill the grid so every row, column and 2x3 box holds 1 to 6 — conflicts light up red.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: #d8412b; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: calc(env(safe-area-inset-top) + 56px) 12px calc(env(safe-area-inset-bottom) + 56px); }
+    canvas { border-radius: var(--r-5); touch-action: none; display: block;
+      box-shadow: 8px 8px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.03); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-panel-2)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Time <b id="time">0:00</b></span>
+    <span class="gx-pill">Left <b id="left">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-target"/></svg> Tap cell · pad</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-bolt"/></svg> Arrows · 1-6 · Space</span>
+    <span class="gx-hint__chip as-btn" id="eraseBtn"><svg class="gx-ico"><use href="#i-x"/></svg> Erase (0)</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> New (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Solved!</h2>
+      <div class="gx-modal__row">Time <b id="finalTime">0:00</b></div>
+      <div class="gx-modal__row">Mistakes <b id="finalMistakes">0</b></div>
+      <div class="gx-modal__row">Best time <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">New puzzle</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-sudoku-best';   // fastest solve time in seconds (lower = better)
+    const N = 6, BR = 2, BC = 3;                  // 6x6 grid; boxes are 2 rows x 3 cols
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const timeEl  = document.getElementById('time');
+    const leftEl  = document.getElementById('left');
+    const bestEl  = document.getElementById('best');
+    const overEl  = document.getElementById('over');
+    const overTitleEl   = document.getElementById('overTitle');
+    const finalTimeEl   = document.getElementById('finalTime');
+    const finalMistakesEl = document.getElementById('finalMistakes');
+    const finalBestEl   = document.getElementById('finalBest');
+    const newBestEl     = document.getElementById('newBest');
+    const againLabelEl  = document.getElementById('againLabel');
+
+    // palette
+    const COL = {
+      boardTop:'#1b1410', boardBot:'#100c09', line:'#36281d', lineBold:'#5a4632',
+      bg:'#15110e', red:'#d8412b', amber:'#e8a23a', bone:'#f4ede1',
+      text2:'#b3a48f', text3:'#80715c', given:'#e8c79a', cellTop:'#211a14', cellBot:'#1a130f'
+    };
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x5fa3c19b;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+    function shuffle(arr){ for(let i = arr.length - 1; i > 0; i--){ const j = randInt(i + 1); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; }
+
+    // ---- state ----
+    let solution;     // Uint8Array N*N — the full solved grid (1..6)
+    let puzzle;       // Uint8Array N*N — given clues (0 = blank), immutable
+    let board;        // Uint8Array N*N — current player values (0 = empty)
+    let given;        // Uint8Array N*N — 1 where it's a fixed clue
+    let conflict;     // Uint8Array N*N — 1 where this cell currently breaks a rule
+    let cursor;       // selected cell index
+    let won, paused, mistakes, puzzleNo = 0;
+    let elapsed = 0, startTime = 0, lastTick = 0;   // seconds (sim time, monotonic via rAF dt)
+    let parts = [];                                  // win particles
+    let pulse = 0;                                   // selection pulse phase
+    let rafPending = false, lastNow = 0;
+
+    let best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? fmtTime(best) : '—';
+
+    function fmtTime(s){ s = Math.max(0, Math.floor(s)); const m = (s / 60) | 0; const r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+
+    // ---- layout ----
+    let size = 420, gpad = 16, cell = 64, padY = 0, padN = 0, dpr = 1;
+    // The canvas holds the board (square) plus a number pad row beneath it.
+    function fit(){
+      const availW = Math.min(innerWidth * 0.94, 460);
+      const availH = innerHeight - 150;       // room for HUD + hint chips
+      // board + pad: pad height ~ 18% of board
+      let board = Math.min(availW, availH / 1.2, 440);
+      board = Math.max(240, board);
+      size = board;
+      gpad = size * 0.04;
+      cell = (size - gpad * 2) / N;
+      padN = cell * 0.92;                     // number-pad button size
+      const padH = padN + size * 0.06;
+      const totalH = size + padH;
+
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = totalH * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = totalH + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      padY = size + size * 0.04;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    function cellXY(i){ const x = i % N, y = (i / N) | 0; return [gpad + x * cell, gpad + y * cell]; }
+
+    // ---- pad button geometry (6 buttons + erase) ----
+    function padRects(){
+      const n = N + 1;                        // 1..6 plus erase
+      const gap = (size - gpad * 2 - padN * n) / (n - 1);
+      const rects = [];
+      for(let k = 0; k < n; k++){
+        const x = gpad + k * (padN + gap);
+        rects.push({ x, y: padY, w: padN, h: padN, val: k < N ? k + 1 : 0 });
+      }
+      return rects;
+    }
+
+    // ---- puzzle generation ----
+    // Build a valid full 6x6 solution by permuting a canonical base pattern,
+    // then carve clues, always leaving a uniquely-solvable puzzle.
+    function baseValue(r, c){
+      // canonical Latin-square / sudoku pattern for a 6x6 (2x3 boxes)
+      return ((BC * (r % BR) + ((r / BR) | 0) + c) % N);   // 0..5
+    }
+    function buildSolution(){
+      // start from base pattern (values 0..5), then relabel + shuffle bands/stacks
+      const g = new Uint8Array(N * N);
+      for(let r = 0; r < N; r++) for(let c = 0; c < N; c++) g[r * N + c] = baseValue(r, c);
+
+      // relabel digits
+      const map = shuffle([0,1,2,3,4,5]);
+      for(let i = 0; i < g.length; i++) g[i] = map[g[i]];
+
+      // shuffle rows within each band (band = BR rows) and the bands themselves
+      let rowOrder = [];
+      const bands = shuffle([0,1,2]);                // 3 bands of BR=2 rows
+      for(const b of bands){ const inner = shuffle([0,1]); for(const k of inner) rowOrder.push(b * BR + k); }
+      // shuffle cols within each stack (stack = BC cols) and the stacks themselves
+      let colOrder = [];
+      const stacks = shuffle([0,1]);                 // 2 stacks of BC=3 cols
+      for(const s of stacks){ const inner = shuffle([0,1,2]); for(const k of inner) colOrder.push(s * BC + k); }
+
+      const out = new Uint8Array(N * N);
+      for(let r = 0; r < N; r++) for(let c = 0; c < N; c++)
+        out[r * N + c] = g[rowOrder[r] * N + colOrder[c]] + 1;   // values 1..6
+      return out;
+    }
+
+    // count solutions (cap at 2) for uniqueness check via backtracking
+    function countSolutions(grid, limit){
+      const g = grid.slice();
+      let count = 0;
+      function okAt(idx, v){
+        const r = (idx / N) | 0, c = idx % N;
+        for(let cc = 0; cc < N; cc++) if(g[r * N + cc] === v) return false;
+        for(let rr = 0; rr < N; rr++) if(g[rr * N + c] === v) return false;
+        const br = ((r / BR) | 0) * BR, bc = ((c / BC) | 0) * BC;
+        for(let dr = 0; dr < BR; dr++) for(let dc = 0; dc < BC; dc++)
+          if(g[(br + dr) * N + (bc + dc)] === v) return false;
+        return true;
+      }
+      function solve(idx){
+        if(count >= limit) return;
+        if(idx === N * N){ count++; return; }
+        if(g[idx] !== 0){ solve(idx + 1); return; }
+        for(let v = 1; v <= N; v++){
+          if(okAt(idx, v)){ g[idx] = v; solve(idx + 1); g[idx] = 0; if(count >= limit) return; }
+        }
+      }
+      solve(0);
+      return count;
+    }
+
+    function makePuzzle(){
+      solution = buildSolution();
+      const p = solution.slice();
+      // carve cells in random order while keeping a unique solution.
+      const order = shuffle(Array.from({length: N * N}, (_, i) => i));
+      // target number of clues (8..12 visible) — keep it friendly but solvable
+      const targetClues = 10 + randInt(3);    // 10..12 clues remain
+      let clues = N * N;
+      for(const i of order){
+        if(clues <= targetClues) break;
+        const backup = p[i];
+        p[i] = 0;
+        if(countSolutions(p, 2) === 1){ clues--; }
+        else { p[i] = backup; }   // removing this would create ambiguity — keep it
+      }
+      puzzle = p;
+    }
+
+    function startPuzzle(fresh){
+      if(fresh) puzzleNo++;
+      makePuzzle();
+      board = puzzle.slice();
+      given = new Uint8Array(N * N);
+      for(let i = 0; i < N * N; i++) given[i] = puzzle[i] ? 1 : 0;
+      conflict = new Uint8Array(N * N);
+      // place cursor on first empty cell
+      cursor = 0;
+      for(let i = 0; i < N * N; i++){ if(!given[i]){ cursor = i; break; } }
+      won = false; paused = false; mistakes = 0;
+      elapsed = 0; startTime = 0; lastTick = 0;
+      parts = [];
+      overEl.classList.remove('gx-show');
+      updateConflicts();
+      updateHud();
+      fit();
+      requestFrame();
+    }
+
+    // ---- rules / conflicts ----
+    function updateConflicts(){
+      conflict.fill(0);
+      // rows, cols, boxes: mark any duplicate non-zero value
+      const mark = (idxs) => {
+        const seen = {};
+        for(const i of idxs){ const v = board[i]; if(!v) continue; (seen[v] = seen[v] || []).push(i); }
+        for(const v in seen){ if(seen[v].length > 1) for(const i of seen[v]) conflict[i] = 1; }
+      };
+      for(let r = 0; r < N; r++){ const idxs = []; for(let c = 0; c < N; c++) idxs.push(r * N + c); mark(idxs); }
+      for(let c = 0; c < N; c++){ const idxs = []; for(let r = 0; r < N; r++) idxs.push(r * N + c); mark(idxs); }
+      for(let br = 0; br < N; br += BR) for(let bc = 0; bc < N; bc += BC){
+        const idxs = []; for(let dr = 0; dr < BR; dr++) for(let dc = 0; dc < BC; dc++) idxs.push((br + dr) * N + (bc + dc));
+        mark(idxs);
+      }
+    }
+
+    function emptyCount(){ let n = 0; for(let i = 0; i < N * N; i++) if(!board[i]) n++; return n; }
+    function hasConflict(){ for(let i = 0; i < N * N; i++) if(conflict[i]) return true; return false; }
+
+    function updateHud(){
+      leftEl.textContent = emptyCount();
+      timeEl.textContent = fmtTime(elapsed);
+    }
+
+    // ---- core action: set a value into the selected cell ----
+    function setValue(v){
+      if(paused || won) return;
+      if(given[cursor]) return;            // can't overwrite clues
+      const prev = board[cursor];
+      if(prev === v && v !== 0) return;    // no-op
+      board[cursor] = v;
+      // count a mistake when a non-zero entry disagrees with the unique solution
+      if(v !== 0 && v !== solution[cursor]) mistakes++;
+      updateConflicts();
+      if(v) burst(cursor, conflict[cursor] ? COL.red : COL.amber, 6);
+      updateHud();
+      requestFrame();
+      checkWin();
+    }
+
+    function checkWin(){
+      if(emptyCount() === 0 && !hasConflict()){ win(); }
+    }
+
+    function burst(i, col, count){
+      const [px, py] = cellXY(i);
+      const cx = px + cell / 2, cy = py + cell / 2;
+      for(let k = 0; k < count; k++){
+        const a = (k / count) * Math.PI * 2 + rand() * 0.7;
+        const s = 1.2 + rand() * 2.6;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, c: col });
+      }
+    }
+
+    // ---- win ----
+    function win(){
+      won = true;
+      for(let i = 0; i < N * N; i++) burst(i, (i % 2) ? COL.amber : COL.red, 5);
+      const t = Math.floor(elapsed);
+      let isBest = false;
+      if(best === 0 || t < best){ best = t; localStorage.setItem(BEST_KEY, best); isBest = true; }
+      bestEl.textContent = best > 0 ? fmtTime(best) : '—';
+      overTitleEl.textContent = 'Solved!';
+      againLabelEl.textContent = 'New puzzle';
+      finalTimeEl.textContent = fmtTime(t);
+      finalMistakesEl.textContent = mistakes;
+      finalBestEl.textContent = best > 0 ? fmtTime(best) : '—';
+      newBestEl.textContent = isBest ? 'New best — fastest solve!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 520);
+    }
+
+    function togglePause(){
+      if(won) return;
+      paused = !paused;
+      if(paused){
+        overTitleEl.textContent = 'Paused';
+        againLabelEl.textContent = 'Resume';
+        finalTimeEl.textContent = fmtTime(elapsed);
+        finalMistakesEl.textContent = mistakes;
+        finalBestEl.textContent = best > 0 ? fmtTime(best) : '—';
+        newBestEl.textContent = '';
+        overEl.classList.add('gx-show');
+      } else {
+        overEl.classList.remove('gx-show');
+      }
+      requestFrame();
+    }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+
+      if(!won && !paused){ elapsed += dt; lastTick += dt; if(lastTick >= 0.25){ lastTick = 0; updateHud(); } active = true; }
+
+      pulse += dt * 3; if(pulse > Math.PI * 2) pulse -= Math.PI * 2;
+
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 2.0; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+
+      render();
+      if(active || (!won && !paused)) requestFrame();
+    }
+
+    // ---- rendering ----
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+    const fontDisplay = () => getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'Anton';
+
+    function render(){
+      const totalH = +canvas.height / dpr;
+      ctx.clearRect(0, 0, size, totalH);
+
+      // board background
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, COL.boardTop); bg.addColorStop(1, COL.boardBot);
+      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+      ctx.strokeStyle = COL.lineBold; ctx.lineWidth = 1;
+      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.045); ctx.stroke();
+
+      drawCells();
+      drawGrid();
+      drawPad();
+      drawParticles();
+
+      if(paused){
+        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, totalH, size * 0.045); ctx.fill();
+        ctx.fillStyle = COL.bone; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '400 ' + Math.floor(size * 0.11) + 'px ' + fontDisplay();
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    function drawCells(){
+      // highlight: same row/col/box as cursor, and matching values
+      const cr = (cursor / N) | 0, cc = cursor % N, cv = board[cursor];
+      const cbr = ((cr / BR) | 0) * BR, cbc = ((cc / BC) | 0) * BC;
+
+      for(let i = 0; i < N * N; i++){
+        const [px, py] = cellXY(i);
+        const r = (i / N) | 0, c = i % N;
+        const sameLine = (r === cr || c === cc);
+        const sameBox = (r >= cbr && r < cbr + BR && c >= cbc && c < cbc + BC);
+
+        // peer highlight wash
+        if((sameLine || sameBox) && i !== cursor){
+          ctx.fillStyle = 'rgba(232,162,58,.07)';
+          ctx.fillRect(px, py, cell, cell);
+        }
+        // same-value highlight
+        if(cv && board[i] === cv && i !== cursor){
+          ctx.fillStyle = 'rgba(232,162,58,.16)';
+          ctx.fillRect(px, py, cell, cell);
+        }
+        // conflict wash
+        if(conflict[i]){
+          ctx.fillStyle = 'rgba(216,65,43,.26)';
+          ctx.fillRect(px, py, cell, cell);
+        }
+        // selected cell
+        if(i === cursor && !won){
+          const a = 0.30 + 0.12 * Math.sin(pulse);
+          ctx.fillStyle = 'rgba(216,65,43,' + a + ')';
+          ctx.fillRect(px, py, cell, cell);
+          ctx.strokeStyle = COL.red; ctx.lineWidth = Math.max(2, cell * 0.045);
+          ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
+        }
+
+        // value
+        const v = board[i];
+        if(v){
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.font = '400 ' + Math.floor(cell * 0.56) + 'px ' + fontDisplay();
+          ctx.fillStyle = conflict[i] ? COL.red : (given[i] ? COL.given : COL.bone);
+          ctx.fillText(String(v), px + cell / 2, py + cell / 2 + cell * 0.02);
+        }
+      }
+    }
+
+    function drawGrid(){
+      // thin lines
+      ctx.strokeStyle = COL.line; ctx.lineWidth = 1;
+      for(let k = 1; k < N; k++){
+        const p = gpad + k * cell;
+        ctx.beginPath(); ctx.moveTo(p, gpad); ctx.lineTo(p, gpad + N * cell); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(gpad, p); ctx.lineTo(gpad + N * cell, p); ctx.stroke();
+      }
+      // bold box borders
+      ctx.strokeStyle = COL.lineBold; ctx.lineWidth = Math.max(2, cell * 0.05);
+      // vertical bold lines between stacks (every BC cols)
+      for(let c = 0; c <= N; c += BC){
+        const p = gpad + c * cell;
+        ctx.beginPath(); ctx.moveTo(p, gpad); ctx.lineTo(p, gpad + N * cell); ctx.stroke();
+      }
+      // horizontal bold lines between bands (every BR rows)
+      for(let r = 0; r <= N; r += BR){
+        const p = gpad + r * cell;
+        ctx.beginPath(); ctx.moveTo(gpad, p); ctx.lineTo(gpad + N * cell, p); ctx.stroke();
+      }
+    }
+
+    function drawPad(){
+      const rects = padRects();
+      for(const b of rects){
+        const isErase = b.val === 0;
+        const sel = (!isErase && board[cursor] === b.val && !given[cursor]);
+        const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h);
+        grad.addColorStop(0, COL.cellTop); grad.addColorStop(1, COL.cellBot);
+        ctx.fillStyle = grad;
+        roundRect(b.x, b.y, b.w, b.h, b.w * 0.18); ctx.fill();
+        ctx.strokeStyle = sel ? COL.amber : COL.lineBold; ctx.lineWidth = sel ? Math.max(2, b.w * 0.06) : 1.5;
+        roundRect(b.x + 0.75, b.y + 0.75, b.w - 1.5, b.h - 1.5, b.w * 0.18); ctx.stroke();
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if(isErase){
+          // X glyph
+          ctx.strokeStyle = COL.text2; ctx.lineWidth = Math.max(2, b.w * 0.07);
+          const m = b.w * 0.32;
+          ctx.beginPath();
+          ctx.moveTo(b.x + m, b.y + m); ctx.lineTo(b.x + b.w - m, b.y + b.h - m);
+          ctx.moveTo(b.x + b.w - m, b.y + m); ctx.lineTo(b.x + m, b.y + b.h - m);
+          ctx.stroke();
+        } else {
+          ctx.font = '400 ' + Math.floor(b.h * 0.52) + 'px ' + fontDisplay();
+          ctx.fillStyle = sel ? COL.amber : COL.bone;
+          ctx.fillText(String(b.val), b.x + b.w / 2, b.y + b.h / 2 + b.h * 0.02);
+        }
+      }
+    }
+
+    function drawParticles(){
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ---- input: tap / click on board or pad ----
+    onTap(canvas, (clientX, clientY) => {
+      if(won) return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      if(paused){ togglePause(); return; }     // tap to resume
+
+      // board area
+      if(ly < gpad + N * cell){
+        const x = Math.floor((lx - gpad) / cell), y = Math.floor((ly - gpad) / cell);
+        if(x < 0 || x >= N || y < 0 || y >= N) return;
+        cursor = y * N + x;
+        requestFrame();
+        return;
+      }
+      // pad area
+      for(const b of padRects()){
+        if(lx >= b.x && lx <= b.x + b.w && ly >= b.y && ly <= b.y + b.h){ setValue(b.val); return; }
+      }
+    });
+
+    document.getElementById('eraseBtn').onclick = () => setValue(0);
+    document.getElementById('newBtn').onclick = () => startPuzzle(true);
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => {
+      if(won) startPuzzle(true);
+      else togglePause();                       // resume from pause modal
+    };
+
+    // ---- keyboard ----
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor(-1, 0); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor(1, 0); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor(0, -1); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); moveCursor(0, 1); }
+      else if(k >= '1' && k <= '6'){ e.preventDefault(); if(!paused) setValue(+k); }
+      else if(k === '0' || k === 'Backspace' || k === 'Delete'){ e.preventDefault(); if(!paused) setValue(0); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(won) startPuzzle(true);
+        else if(paused) togglePause();
+        else { // Space/Enter: fill the cell with the next unused value as a convenience? No — advance to next empty.
+          gotoNextEmpty();
+        }
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); startPuzzle(true); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    function moveCursor(dx, dy){
+      if(paused || won) return;
+      let x = cursor % N, y = (cursor / N) | 0;
+      x = Math.max(0, Math.min(N - 1, x + dx));
+      y = Math.max(0, Math.min(N - 1, y + dy));
+      cursor = y * N + x;
+      requestFrame();
+    }
+    function gotoNextEmpty(){
+      if(paused || won) return;
+      for(let s = 1; s <= N * N; s++){ const i = (cursor + s) % (N * N); if(!board[i]){ cursor = i; requestFrame(); return; } }
+    }
+
+    // ---- boot ----
+    startPuzzle(true);
+  </script>
+</body>
+</html>

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Simon — Gamf</title>
+  <meta name="description" content="Watch the lights, then repeat the growing four-colour sequence. A touch-first arcade take on the classic memory game — how long is your chain?">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+  <style>
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
+    canvas { touch-action: none; display: block; border-radius: var(--r-5);
+      box-shadow: var(--sh-hero), inset 0 0 0 1px rgba(255,255,255,.03); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-amber) 16%, var(--gx-screen)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Round <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-bolt"/></svg> Tap the pads</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-target"/></svg> Arrows · Space</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> Restart (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Game over / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Game Over</h2>
+      <div class="gx-modal__row">Round <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Play again</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ---- config ----
+    const BEST_KEY = 'gamf-puzzle-simon-best';   // highest round reached (higher = better)
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const scoreEl = document.getElementById('score');
+    const bestEl  = document.getElementById('best');
+    const overEl  = document.getElementById('over');
+    const overTitleEl = document.getElementById('overTitle');
+    const finalScoreEl = document.getElementById('finalScore');
+    const finalBestEl  = document.getElementById('finalBest');
+    const newBestEl = document.getElementById('newBest');
+    const againLabelEl = document.getElementById('againLabel');
+
+    // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
+    let seed = 0x5117c0de;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ---- pads: 4 quadrants. Arcade palette: red, amber, bone, deep ----
+    // Tuned hues so all four read clearly against the warm-black cabinet.
+    const PADS = [
+      { name: 'red',   base: '#7a2218', lit: '#ff5a3c', glow: '#ff7a52', freq: 415.30 }, // top-left
+      { name: 'amber', base: '#7a531a', lit: '#ffc24a', glow: '#ffd66e', freq: 311.13 }, // top-right
+      { name: 'teal',  base: '#16504a', lit: '#3fe0c2', glow: '#6cf0d8', freq: 261.63 }, // bottom-left
+      { name: 'bone',  base: '#6b5f4c', lit: '#f4ede1', glow: '#fff8ec', freq: 349.23 }, // bottom-right
+    ];
+    // keyboard mapping: arrow/WASD -> pad index (TL, TR, BL, BR)
+    // Up=TL? We instead map the 4 arrows to the 4 pads spatially via a helper.
+
+    // ---- state ----
+    let sequence = [];          // array of pad indices
+    let inputIdx = 0;           // how far the player is into repeating
+    let round = 0;              // current round number (== sequence length once playing)
+    let best = 0;
+    let phase = 'idle';         // idle | showing | input | over | paused
+    let pausedFrom = null;      // phase to resume to after pause
+    let cursor = 0;             // keyboard-highlighted pad
+    let activePad = -1;         // pad currently lit (during show or press)
+    let activeUntil = 0;        // performance.now ms when activePad turns off
+    let showQueue = [];         // pending {pad, at} flashes during showing
+    let showTimer = null;       // scheduled timeout id
+    let parts = [];             // particle bursts
+    let rafPending = false, lastNow = 0;
+    let shake = 0;              // screen-shake amount on mistake
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    // ---- audio (WebAudio, lazily created on first user gesture) ----
+    let actx = null;
+    function ensureAudio(){
+      if(!actx){
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if(AC) actx = new AC();
+      }
+      if(actx && actx.state === 'suspended') actx.resume();
+    }
+    function tone(freq, dur = 0.32, type = 'sine'){
+      if(!actx) return;
+      const now = actx.currentTime;
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.start(now); osc.stop(now + dur + 0.02);
+    }
+    function buzz(){
+      if(!actx) return;
+      const now = actx.currentTime;
+      const osc = actx.createOscillator();
+      const gain = actx.createGain();
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(70, now + 0.5);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+      osc.connect(gain); gain.connect(actx.destination);
+      osc.start(now); osc.stop(now + 0.56);
+    }
+
+    // ---- layout ----
+    let size = 400, cx = 200, cy = 200, R = 180, gap = 10, dpr = 1;
+    function fit(){
+      size = Math.max(240, Math.min(innerWidth * 0.94, 480, innerHeight - 210));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = size * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = size / 2; cy = size / 2;
+      R = size * 0.46;
+      gap = size * 0.022;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    // Each pad is a quarter-ring (annulus quadrant). Angles, in canvas radians:
+    //  0: red   top-left   -> 180deg..270deg
+    //  1: amber top-right  -> 270deg..360deg
+    //  2: teal  bottom-left-> 90deg..180deg
+    //  3: bone  bottom-right->0deg..90deg
+    const PAD_ANG = [
+      [Math.PI, Math.PI * 1.5],        // TL
+      [Math.PI * 1.5, Math.PI * 2],    // TR
+      [Math.PI * 0.5, Math.PI],        // BL
+      [0, Math.PI * 0.5],              // BR
+    ];
+    const innerR = () => R * 0.40;
+
+    function padAt(lx, ly){
+      const dx = lx - cx, dy = ly - cy;
+      const dist = Math.hypot(dx, dy);
+      if(dist < innerR() || dist > R) return -1;
+      let a = Math.atan2(dy, dx);              // -PI..PI
+      if(a < 0) a += Math.PI * 2;              // 0..2PI
+      // small dead-zone along the cross gap
+      for(let i = 0; i < 4; i++){
+        const [s, e] = PAD_ANG[i];
+        if(a >= s + 0.02 && a <= e - 0.02) return i;
+      }
+      return -1;
+    }
+
+    // ---- sequence flow ----
+    function start(){
+      ensureAudio();
+      sequence = []; inputIdx = 0; round = 0;
+      parts = []; shake = 0; activePad = -1;
+      overEl.classList.remove('gx-show');
+      phase = 'idle';
+      nextRound();
+    }
+
+    function nextRound(){
+      round++;
+      scoreEl.textContent = round;
+      sequence.push(randInt(4));
+      inputIdx = 0;
+      playSequence();
+    }
+
+    let showEndAt = 0; // animation-clock time when the whole show finishes
+    function playSequence(){
+      phase = 'showing';
+      cursor = sequence[0];
+      // speed scales up with sequence length, with a floor
+      const onMs = Math.max(220, 540 - sequence.length * 18);
+      const offMs = Math.max(110, 250 - sequence.length * 8);
+      showQueue = [];
+      let t = 420; // initial wait so the player can re-orient
+      for(let i = 0; i < sequence.length; i++){
+        showQueue.push({ pad: sequence[i], on: t, off: t + onMs });
+        t += onMs + offMs;
+      }
+      showAnchor = 0;        // re-anchored on next frame
+      showEndAt = t;         // relative ms until input phase begins
+      clearTimeout(showTimer);
+      activePad = -1;
+      requestFrame();
+    }
+
+    function flash(pad, dur, withTone){
+      activePad = pad;
+      activeUntil = performance.now() + dur;
+      if(withTone) tone(PADS[pad].freq, Math.max(0.18, dur / 1000 + 0.04), 'sine');
+      requestFrame();
+    }
+
+    // ---- player input ----
+    function pressPad(pad){
+      if(phase !== 'input') return;
+      ensureAudio();
+      cursor = pad;
+      flash(pad, 260, true);
+      burst(pad);
+      if(pad === sequence[inputIdx]){
+        inputIdx++;
+        if(inputIdx >= sequence.length){
+          // round cleared — brief celebratory lock, then grow the sequence
+          phase = 'cleared';
+          clearTimeout(showTimer);
+          showTimer = setTimeout(() => {
+            if(phase !== 'cleared') return;   // cancelled by pause / reset / over
+            nextRound();
+          }, 640);
+        }
+      } else {
+        gameOver();
+      }
+    }
+
+    function burst(pad){
+      const [s, e] = PAD_ANG[pad];
+      const mid = (s + e) / 2;
+      const rr = (innerR() + R) / 2;
+      const px = cx + Math.cos(mid) * rr, py = cy + Math.sin(mid) * rr;
+      const col = PADS[pad].glow;
+      for(let k = 0; k < 10; k++){
+        const a = mid + (rand() - 0.5) * 1.4;
+        const sp = 1.2 + rand() * 2.8;
+        parts.push({ x: px, y: py, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: col });
+      }
+    }
+
+    // ---- end / progress ----
+    function gameOver(){
+      phase = 'over';
+      clearTimeout(showTimer);
+      buzz();
+      shake = 1;
+      const final = round;       // the round they reached (length of sequence they were repeating)
+      let isBest = false;
+      if(final > best){ best = final; localStorage.setItem(BEST_KEY, best); isBest = true; }
+      bestEl.textContent = best > 0 ? best : '—';
+      overTitleEl.textContent = 'Game Over';
+      againLabelEl.textContent = 'Play again';
+      finalScoreEl.textContent = final;
+      finalBestEl.textContent = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best round!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 620);
+    }
+
+    function reset(){ clearTimeout(showTimer); start(); }
+
+    function togglePause(){
+      if(phase === 'over' || phase === 'idle') return;
+      if(phase === 'paused'){
+        const resume = pausedFrom || 'input';
+        pausedFrom = null;
+        activePad = -1;
+        if(resume === 'showing' || resume === 'cleared'){
+          // replay the current sequence so the player re-sees it cleanly
+          playSequence();
+        } else {
+          phase = resume;
+        }
+        requestFrame();
+      } else {
+        pausedFrom = phase;
+        phase = 'paused';
+        clearTimeout(showTimer);
+        showEndAt = 0; showAnchor = 0; showQueue = [];
+        requestFrame();
+      }
+    }
+
+    // ---- animation loop ----
+    function requestFrame(){ if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); } }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+
+      // drive the show phase entirely off the animation clock (single anchor)
+      if(phase === 'showing' && showEndAt > 0){
+        if(showAnchor === 0) showAnchor = now;
+        const el = now - showAnchor;
+        while(showQueue.length && el >= showQueue[0].on){
+          const f = showQueue.shift();
+          cursor = f.pad;
+          flash(f.pad, f.off - f.on, true);
+        }
+        if(el >= showEndAt){
+          // all flashes done -> hand control to the player
+          phase = 'input';
+          inputIdx = 0;
+          activePad = -1;
+          showEndAt = 0;
+          showAnchor = 0;
+        }
+        active = true;
+      }
+
+      // expire active pad
+      if(activePad >= 0 && now >= activeUntil){ activePad = -1; }
+      if(activePad >= 0) active = true;
+
+      // particles
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 2.0; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+
+      if(shake > 0){ shake = Math.max(0, shake - dt * 3.2); active = true; }
+
+      render(now);
+      if(active || phase === 'showing') requestFrame();
+    }
+    let showAnchor = 0;
+
+    // ---- rendering ----
+    function drawPad(i, now){
+      const [s, e] = PAD_ANG[i];
+      const ir = innerR(), or = R;
+      const isLit = (activePad === i);
+      const isCursor = (phase === 'input' && cursor === i);
+      const pad = PADS[i];
+
+      // pulse factor for lit pads
+      let glow = 0;
+      if(isLit){
+        const remain = Math.max(0, activeUntil - now);
+        glow = Math.min(1, 0.35 + remain / 300);
+      }
+
+      const a0 = s + 0.012, a1 = e - 0.012;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, or, a0, a1, false);
+      ctx.arc(cx, cy, ir, a1, a0, true);
+      ctx.closePath();
+
+      if(isLit){
+        ctx.shadowColor = pad.glow;
+        ctx.shadowBlur = 28 * glow;
+      }
+      // radial-ish fill: blend base->lit by glow
+      const grad = ctx.createRadialGradient(cx, cy, ir, cx, cy, or);
+      const top = isLit ? pad.lit : pad.base;
+      grad.addColorStop(0, shade(top, isLit ? 1.04 : 0.9));
+      grad.addColorStop(1, shade(top, isLit ? 0.86 : 0.66));
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+
+      // gloss sweep near the outer edge
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, or, a0, a1, false);
+      ctx.arc(cx, cy, or - (or - ir) * 0.34, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + glow * 0.14) + ')';
+      ctx.fill();
+      ctx.restore();
+
+      // keyboard cursor ring (mid-arc tick)
+      if(isCursor && !isLit){
+        const mid = (s + e) / 2, rr = (ir + or) / 2;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(mid) * rr, cy + Math.sin(mid) * rr, (or - ir) * 0.18, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(244,237,225,.9)';
+        ctx.lineWidth = Math.max(2, size * 0.008);
+        ctx.stroke();
+      }
+
+      // thin separator stroke
+      ctx.beginPath();
+      ctx.arc(cx, cy, or, a0, a1, false);
+      ctx.arc(cx, cy, ir, a1, a0, true);
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(10,8,6,.65)';
+      ctx.lineWidth = Math.max(1, size * 0.006);
+      ctx.stroke();
+    }
+
+    // multiply a hex color by a factor (clamped)
+    function shade(hex, f){
+      const [r, g, b] = hexToRgb(hex);
+      const c = v => Math.max(0, Math.min(255, Math.round(v * f)));
+      return `rgb(${c(r)},${c(g)},${c(b)})`;
+    }
+    function hexToRgb(h){
+      if(h[0] === 'r'){ const m = h.match(/\d+/g); return [+m[0], +m[1], +m[2]]; }
+      h = h.replace('#', '');
+      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+    }
+
+    function render(now){
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      if(shake > 0){
+        const m = shake * 6;
+        ctx.translate((rand() - 0.5) * m, (rand() - 0.5) * m);
+      }
+
+      // cabinet background plate
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#100c09');
+      ctx.fillStyle = bg;
+      roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1; ctx.stroke();
+
+      // outer ring of the disc
+      ctx.beginPath();
+      ctx.arc(cx, cy, R + gap * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#0a0806'; ctx.fill();
+
+      const t = now || performance.now();
+      for(let i = 0; i < 4; i++) drawPad(i, t);
+
+      // center hub
+      ctx.beginPath();
+      ctx.arc(cx, cy, innerR() - gap * 0.4, 0, Math.PI * 2);
+      const hub = ctx.createRadialGradient(cx, cy - innerR() * 0.3, innerR() * 0.1, cx, cy, innerR());
+      hub.addColorStop(0, '#241b14'); hub.addColorStop(1, '#120d09');
+      ctx.fillStyle = hub; ctx.fill();
+      ctx.strokeStyle = '#36281d'; ctx.lineWidth = Math.max(1, size * 0.006); ctx.stroke();
+
+      // hub label / status
+      ctx.fillStyle = '#f4ede1';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const disp = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'Anton';
+      const mono = getComputedStyle(document.body).getPropertyValue('--gx-font-mono') || 'monospace';
+      ctx.font = '400 ' + Math.floor(innerR() * 0.62) + 'px ' + disp;
+      ctx.fillText(String(round || 0), cx, cy - innerR() * 0.10);
+      ctx.fillStyle = '#b3a48f';
+      ctx.font = '700 ' + Math.floor(innerR() * 0.16) + 'px ' + mono;
+      let label = 'ROUND';
+      if(phase === 'showing') label = 'WATCH';
+      else if(phase === 'input') label = 'REPEAT';
+      else if(phase === 'cleared') label = 'NICE!';
+      else if(phase === 'over') label = 'OVER';
+      else if(phase === 'idle') label = 'READY';
+      ctx.fillText(label, cx, cy + innerR() * 0.34);
+
+      // particles
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+      ctx.restore();
+
+      // pause veil
+      if(phase === 'paused'){
+        ctx.fillStyle = 'rgba(10,8,6,.74)';
+        roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const disp = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'Anton';
+        ctx.font = '400 ' + Math.floor(size * 0.1) + 'px ' + disp;
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+
+    // ---- input: tap / click ----
+    onTap(canvas, (clientX, clientY) => {
+      ensureAudio();
+      if(phase === 'idle' || phase === 'over'){ if(phase === 'over') return; start(); return; }
+      if(phase !== 'input') return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      const p = padAt(lx, ly);
+      if(p >= 0) pressPad(p);
+    });
+
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => { start(); };
+
+    // ---- keyboard ----
+    // Arrow/WASD select a pad spatially (Up=TL/TR via current cursor column? Use direct map):
+    // We map: Left->BL, Up->TL, Right->TR, Down->BR for a clean 4-way feel,
+    // and also allow stepping: pressing the same axis toggles between the two pads on it.
+    function dirToPad(dir){
+      // diagonal pads on a 4-arrow pad: pick the pad whose arc center is nearest that direction
+      switch(dir){
+        case 'up':    return cursor === 0 ? 1 : 0; // toggle top pads
+        case 'down':  return cursor === 2 ? 3 : 2; // toggle bottom pads
+        case 'left':  return cursor === 0 ? 2 : (cursor === 1 ? 0 : (cursor === 3 ? 2 : 0));
+        case 'right': return cursor === 2 ? 3 : (cursor === 0 ? 1 : (cursor === 3 ? 1 : 1));
+      }
+      return cursor;
+    }
+
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); cursor = dirToPad('left'); requestFrame(); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); cursor = dirToPad('right'); requestFrame(); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); cursor = dirToPad('up'); requestFrame(); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); cursor = dirToPad('down'); requestFrame(); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        ensureAudio();
+        if(phase === 'idle' || phase === 'over'){ start(); }
+        else if(phase === 'input'){ pressPad(cursor); }
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    // direct digit keys 1-4 also press pads, for accessibility / speed
+    addEventListener('keydown', e => {
+      if(e.key >= '1' && e.key <= '4'){ e.preventDefault(); ensureAudio(); if(phase === 'input') pressPad(+e.key - 1); }
+    });
+
+    // ---- boot ----
+    fit();
+    start();
+  </script>
+</body>
+</html>

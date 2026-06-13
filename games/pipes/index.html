@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#15110e">
+  <title>Pipes — Gamf</title>
+  <meta name="description" content="Rotate the pipe tiles to channel the flow from the source to the drain. Tap a tile to turn it 90°, connect them all, and let it pour. A touch-first retro-arcade plumbing puzzle.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../../gamf.css">
+
+  <!-- 3D import map (kept available per arcade convention; this game renders in 2D Canvas) -->
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+
+  <style>
+    /* genre accent for this game */
+    body { --gx-accent: #6c8cff; }
+    html, body { height: 100%; overflow: hidden; touch-action: none; }
+    .stage { position: fixed; inset: 0; display: grid; place-items: center;
+      padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
+    canvas { border-radius: var(--r-5); touch-action: none; display: block;
+      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.03); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
+      background: color-mix(in srgb, var(--gx-amber) 16%, var(--gx-screen)); }
+    .gx-hint__chip.as-btn:active { transform: translateY(1px); }
+  </style>
+</head>
+<body class="gx">
+  <div class="gx-vignette"></div>
+  <script src="../../gamf-icons.js"></script>
+
+  <!-- Top HUD -->
+  <header class="gx-hud">
+    <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
+    <span class="gx-hud__spacer"></span>
+    <span class="gx-pill">Lvl <b id="level">1</b></span>
+    <span class="gx-pill">Score <b id="score">0</b></span>
+    <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
+  </header>
+
+  <div class="stage"><canvas id="c"></canvas></div>
+
+  <!-- Controls hint -->
+  <div class="gx-hint">
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-target"/></svg> Tap a pipe to rotate</span>
+    <span class="gx-hint__chip"><svg class="gx-ico"><use href="#i-arcade"/></svg> Arrows · Space</span>
+    <span class="gx-hint__chip as-btn" id="newBtn"><svg class="gx-ico"><use href="#i-restart"/></svg> New (R)</span>
+    <span class="gx-hint__chip as-btn" id="pauseBtn"><svg class="gx-ico"><use href="#i-pause"/></svg> Pause (P)</span>
+  </div>
+
+  <!-- Win / pause modal -->
+  <div class="gx-modal" id="over">
+    <div class="gx-modal__card">
+      <h2 class="gx-modal__title" id="overTitle">Flow on!</h2>
+      <div class="gx-modal__row">Level <b id="finalLevel">1</b></div>
+      <div class="gx-modal__row">Turns <b id="finalMoves">0</b></div>
+      <div class="gx-modal__row">Score <b id="finalScore">0</b></div>
+      <div class="gx-modal__row">Best <b id="finalBest">—</b></div>
+      <div class="gx-modal__new" id="newBest"></div>
+      <button class="gx-btn gx-btn--primary" id="again">
+        <svg class="gx-ico"><use href="#i-play"/></svg> <span id="againLabel">Next level</span>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { onTap } from './touch.js';
+
+    // ============================================================ config
+    const BEST_KEY = 'gamf-puzzle-pipes-best';     // highest score (higher = better)
+
+    // arcade palette
+    const COL = {
+      bg:    '#15110e',
+      screen:'#100c09',
+      panel: '#1b1410',
+      line:  '#36281d',
+      line2: '#4a3826',
+      ink:   '#0a0806',
+      text:  '#f4ede1',
+      text3: '#80715c',
+      red:   '#d8412b',
+      amber: '#e8a23a',
+      pipeOff:'#5a4c3c',     // unfilled pipe metal
+      pipeOffHi:'#736150',
+      water: '#6c8cff',      // flow accent (matches card color)
+      waterHi:'#a9bcff',
+    };
+
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    const levelEl  = document.getElementById('level');
+    const scoreEl  = document.getElementById('score');
+    const bestEl   = document.getElementById('best');
+    const overEl   = document.getElementById('over');
+    const overTitleEl  = document.getElementById('overTitle');
+    const finalLevelEl = document.getElementById('finalLevel');
+    const finalMovesEl = document.getElementById('finalMoves');
+    const finalScoreEl = document.getElementById('finalScore');
+    const finalBestEl  = document.getElementById('finalBest');
+    const newBestEl    = document.getElementById('newBest');
+    const againLabelEl = document.getElementById('againLabel');
+
+    // ============================================================ deterministic RNG (seeded LCG)
+    let seed = 0x9e3779b1;
+    function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+    function randInt(n){ return Math.floor(rand() * n); }
+
+    // ============================================================ direction model
+    // Bitmask of open sides: 1=Up, 2=Right, 4=Down, 8=Left.
+    const UP = 1, RIGHT = 2, DOWN = 4, LEFT = 8;
+    const DIRS = [
+      { bit: UP,    dx: 0,  dy: -1, opp: DOWN  },
+      { bit: RIGHT, dx: 1,  dy: 0,  opp: LEFT  },
+      { bit: DOWN,  dx: 0,  dy: 1,  opp: UP    },
+      { bit: LEFT,  dx: -1, dy: 0,  opp: RIGHT },
+    ];
+    // rotate a 4-bit mask 90° clockwise (Up->Right->Down->Left->Up)
+    function rotCW(mask){ return ((mask << 1) | (mask >> 3)) & 0xF; }
+
+    // ============================================================ state
+    let N = 4;                 // grid size for current level
+    let tiles;                 // per cell: { mask, angle(render), targetRot, fixed, filled, kind }
+    let srcIdx, drainIdx;      // source / drain cell indices
+    let level, score, best, won, paused, turns;
+    let cursor = 0;            // keyboard cursor index
+    let parts = [];            // celebratory particles
+    let rafPending = false, lastNow = 0;
+    let flowAnim = 0;          // 0..1 fill animation progress on win
+    let solveTime = 0;         // accumulator for flow shimmer
+
+    best = parseInt(localStorage.getItem(BEST_KEY) || '0', 10) || 0;
+    bestEl.textContent = best > 0 ? best : '—';
+
+    // ============================================================ layout
+    let size = 420, cell = 90, pad = 18, dpr = 1;
+    function fit(){
+      size = Math.max(220, Math.min(innerWidth * 0.94, 480, innerHeight - 210));
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = size * dpr; canvas.height = size * dpr;
+      canvas.style.width = size + 'px'; canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pad = size * 0.05; cell = (size - pad * 2) / N;
+      requestFrame();
+    }
+    addEventListener('resize', fit);
+
+    function cellXY(i){ const x = i % N, y = (i / N) | 0; return [pad + x * cell, pad + y * cell]; }
+    function idx(x, y){ return y * N + x; }
+
+    // ============================================================ generation
+    // Build a guaranteed-solvable network: carve a random spanning tree over the
+    // grid (every cell connected), pick source + drain as tree leaves/far cells.
+    // The "solved" orientation is the tree's connection mask. Then scramble each
+    // tile by a random number of CW rotations so the player must un-rotate it.
+    function genSolved(){
+      const total = N * N;
+      const sol = new Uint8Array(total);     // solved open-mask per cell
+      const inTree = new Uint8Array(total);
+      // randomized DFS spanning tree
+      const start = randInt(total);
+      inTree[start] = 1;
+      const stack = [start];
+      while(stack.length){
+        const cur = stack[stack.length - 1];
+        const cx = cur % N, cy = (cur / N) | 0;
+        // collect unvisited neighbours
+        const opts = [];
+        for(const d of DIRS){
+          const nx = cx + d.dx, ny = cy + d.dy;
+          if(nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+          const ni = idx(nx, ny);
+          if(!inTree[ni]) opts.push({ d, ni });
+        }
+        if(opts.length === 0){ stack.pop(); continue; }
+        const pick = opts[randInt(opts.length)];
+        sol[cur] |= pick.d.bit;
+        sol[pick.ni] |= pick.d.opp;
+        inTree[pick.ni] = 1;
+        stack.push(pick.ni);
+      }
+      return sol;
+    }
+
+    function distMap(from){
+      // BFS distance over solved tree (tiles connected via sol masks)
+      const total = N * N;
+      const dist = new Int32Array(total).fill(-1);
+      const q = [from]; dist[from] = 0;
+      let head = 0;
+      while(head < q.length){
+        const cur = q[head++];
+        const cx = cur % N, cy = (cur / N) | 0;
+        for(const d of DIRS){
+          if(!(solMask[cur] & d.bit)) continue;
+          const nx = cx + d.dx, ny = cy + d.dy;
+          if(nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+          const ni = idx(nx, ny);
+          if(dist[ni] === -1){ dist[ni] = dist[cur] + 1; q.push(ni); }
+        }
+      }
+      return dist;
+    }
+
+    let solMask;   // solved masks for the current board (used by distMap + generation reference)
+
+    function newBoard(){
+      const total = N * N;
+      solMask = genSolved();
+
+      // source = a far corner-ish leaf; drain = farthest cell from source over the tree
+      // pick source as the cell with the fewest connections (a leaf) nearest top-left
+      let bestSrc = 0, bestScore = Infinity;
+      for(let i = 0; i < total; i++){
+        const deg = countBits(solMask[i]);
+        const x = i % N, y = (i / N) | 0;
+        const s = deg * 100 + x + y;     // prefer leaves, then near top-left
+        if(s < bestScore){ bestScore = s; bestSrc = i; }
+      }
+      srcIdx = bestSrc;
+      const dist = distMap(srcIdx);
+      let far = srcIdx, farD = -1;
+      for(let i = 0; i < total; i++){ if(dist[i] > farD){ farD = dist[i]; far = i; } }
+      drainIdx = far;
+
+      // build tiles; scramble each by random CW rotations (1..3)
+      tiles = new Array(total);
+      for(let i = 0; i < total; i++){
+        let mask = solMask[i];
+        const fixed = (i === srcIdx || i === drainIdx);
+        let mask2 = mask;
+        if(!fixed){
+          const rots = 1 + randInt(3);
+          for(let r = 0; r < rots; r++) mask2 = rotCW(mask2);
+        }
+        tiles[i] = {
+          mask: mask2,                 // current open-side mask
+          angle: 0,                    // render rotation offset (radians) for spin anim
+          fixed,
+          filled: false,
+          kind: i === srcIdx ? 'src' : i === drainIdx ? 'drain' : 'pipe',
+        };
+      }
+      // ensure the scramble didn't accidentally leave source already linked to drain:
+      // nudge a non-fixed tile by an extra rotation until the start is unsolved.
+      let guard = 0;
+      while(recomputeFlow() && guard++ < total * 4){
+        // rotate the first non-fixed tile currently carrying flow (on the live path)
+        let nudged = false;
+        for(let i = 0; i < total; i++){
+          if(!tiles[i].fixed && tiles[i].filled){ tiles[i].mask = rotCW(tiles[i].mask); nudged = true; break; }
+        }
+        if(!nudged){ for(let i = 0; i < total; i++){ if(!tiles[i].fixed){ tiles[i].mask = rotCW(tiles[i].mask); break; } } }
+      }
+      won = false; flowAnim = 0; turns = 0;
+      cursor = srcIdx;
+      recomputeFlow();
+    }
+
+    function countBits(m){ let c = 0; while(m){ c += m & 1; m >>= 1; } return c; }
+
+    // ============================================================ flow / connectivity
+    // Flood from source through matching open sides; mark filled cells.
+    function recomputeFlow(){
+      const total = N * N;
+      for(let i = 0; i < total; i++) tiles[i].filled = false;
+      const q = [srcIdx]; tiles[srcIdx].filled = true;
+      let head = 0;
+      while(head < q.length){
+        const cur = q[head++];
+        const cx = cur % N, cy = (cur / N) | 0;
+        for(const d of DIRS){
+          if(!(tiles[cur].mask & d.bit)) continue;          // tile must open this way
+          const nx = cx + d.dx, ny = cy + d.dy;
+          if(nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+          const ni = idx(nx, ny);
+          if(!(tiles[ni].mask & d.opp)) continue;            // neighbour must open back
+          if(!tiles[ni].filled){ tiles[ni].filled = true; q.push(ni); }
+        }
+      }
+      return tiles[drainIdx].filled;
+    }
+
+    // ============================================================ actions
+    function rotateTile(i, fromKeyboard){
+      if(paused || won) return;
+      const t = tiles[i];
+      if(!t || t.fixed) return;
+      t.mask = rotCW(t.mask);
+      t.angle -= Math.PI / 2;            // visual: tile spins from -90° back to 0
+      turns++;
+      const connected = recomputeFlow();
+      requestFrame();
+      if(connected) win();
+    }
+
+    function win(){
+      won = true;
+      // score: reward fewer turns, bigger boards, faster solves
+      const base = 600 + level * 120;
+      const efficiency = Math.max(0, 80 - turns) * 6;
+      const sizeBonus = N * N * 4;
+      const gained = base + efficiency + sizeBonus;
+      score += gained;
+      scoreEl.textContent = score;
+
+      let isBest = false;
+      if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); isBest = true; }
+      bestEl.textContent = best > 0 ? best : '—';
+
+      // celebratory particle bursts along the filled path
+      flowAnim = 0;
+      for(let i = 0; i < N * N; i++) if(tiles[i].filled) burst(i);
+
+      overTitleEl.textContent = 'Flow on!';
+      againLabelEl.textContent = 'Next level';
+      finalLevelEl.textContent = level;
+      finalMovesEl.textContent = turns;
+      finalScoreEl.textContent = score;
+      finalBestEl.textContent = best > 0 ? best : '—';
+      newBestEl.textContent = isBest ? 'New best!' : '';
+      requestFrame();
+      setTimeout(() => overEl.classList.add('gx-show'), 620);
+    }
+
+    function burst(i){
+      const [px, py] = cellXY(i);
+      const cx = px + cell / 2, cy = py + cell / 2;
+      const count = 7;
+      for(let k = 0; k < count; k++){
+        const a = (k / count) * Math.PI * 2 + rand() * 0.7;
+        const s = 1.2 + rand() * 2.4;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1,
+          c: rand() < 0.5 ? COL.water : COL.waterHi });
+      }
+    }
+
+    let scoreBeforeLevel = 0;
+    function startLevel(){
+      scoreBeforeLevel = score;          // checkpoint so R can restore pre-level score
+      paused = false;
+      levelEl.textContent = level;
+      scoreEl.textContent = score;
+      parts = [];
+      overEl.classList.remove('gx-show');
+      // grid grows with level, capped
+      N = Math.min(4 + Math.floor((level - 1) / 2), 8);
+      fit();
+      newBoard();
+      requestFrame();
+    }
+
+    function nextLevel(){ level++; startLevel(); }
+
+    function reset(){
+      // R: rebuild current level with a fresh scramble; reset score to before this level
+      score = scoreBeforeLevel;
+      scoreEl.textContent = score;
+      startLevel();
+    }
+
+    function fullReset(){
+      seed = 0x9e3779b1;
+      level = 1; score = 0; scoreBeforeLevel = 0; startLevel();
+    }
+
+    function togglePause(){ if(won) return; paused = !paused; requestFrame(); }
+
+    // ============================================================ animation loop
+    function requestFrame(){
+      if(!rafPending){ rafPending = true; lastNow = lastNow || performance.now(); requestAnimationFrame(frame); }
+    }
+    function frame(now){
+      rafPending = false;
+      const dt = Math.min((now - lastNow) / 1000, 0.05); lastNow = now;
+      let active = false;
+      solveTime += dt;
+
+      // ease tile spin angles toward 0
+      for(let i = 0; i < N * N; i++){
+        const t = tiles[i];
+        if(Math.abs(t.angle) > 0.001){ t.angle *= Math.pow(0.0005, dt); active = true; }
+        else t.angle = 0;
+      }
+      // win flow fill animation
+      if(won && flowAnim < 1){ flowAnim = Math.min(1, flowAnim + dt * 0.9); active = true; }
+      // particles
+      for(const p of parts){ p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= dt * 1.8; }
+      parts = parts.filter(p => p.life > 0);
+      if(parts.length) active = true;
+      // gentle continuous shimmer while any pipe is carrying flow
+      if(tiles.some(t => t.filled && !t.fixed)) active = true;
+
+      render();
+      if(active) requestFrame();
+    }
+
+    // ============================================================ rendering
+    function roundRect(x, y, w, h, r){
+      ctx.beginPath(); ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+    }
+
+    // draw a pipe segment from centre toward a side, as a thick rounded stroke
+    function drawArm(cx, cy, dir, w, color){
+      const half = cell / 2;
+      let ex = cx, ey = cy;
+      if(dir === UP)    ey = cy - half;
+      if(dir === DOWN)  ey = cy + half;
+      if(dir === LEFT)  ex = cx - half;
+      if(dir === RIGHT) ex = cx + half;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    function drawTile(i){
+      const [px, py] = cellXY(i);
+      const cx = px + cell / 2, cy = py + cell / 2;
+      const t = tiles[i];
+      const m = cell * 0.06;
+      const x = px + m, y = py + m, w = cell - m * 2, r = cell * 0.16;
+
+      // socket / tile base
+      ctx.fillStyle = t.filled ? '#1d1a22' : COL.panel;
+      roundRect(x, y, w, w, r); ctx.fill();
+      ctx.strokeStyle = COL.line;
+      ctx.lineWidth = Math.max(1, cell * 0.012);
+      roundRect(x, y, w, w, r); ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(t.angle);            // spin animation around centre
+      ctx.translate(-cx, -cy);
+
+      const pipeW = cell * 0.30;
+      const filled = t.filled;
+      const fillCol = filled ? COL.water : COL.pipeOff;
+      const fillHi  = filled ? COL.waterHi : COL.pipeOffHi;
+
+      // dark casing arms first (slightly wider)
+      for(const d of DIRS){
+        if(t.mask & d.bit) drawArm(cx, cy, d.bit, pipeW + cell * 0.07, COL.ink);
+      }
+      // main pipe arms
+      for(const d of DIRS){
+        if(t.mask & d.bit) drawArm(cx, cy, d.bit, pipeW, fillCol);
+      }
+      // highlight core
+      for(const d of DIRS){
+        if(t.mask & d.bit) drawArm(cx, cy, d.bit, pipeW * 0.34, fillHi);
+      }
+
+      // centre hub
+      const bits = countBits(t.mask);
+      if(bits > 0){
+        ctx.fillStyle = fillCol;
+        ctx.beginPath(); ctx.arc(cx, cy, pipeW * 0.62, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = fillHi;
+        ctx.beginPath(); ctx.arc(cx - pipeW * 0.12, cy - pipeW * 0.12, pipeW * 0.22, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // flowing shimmer on filled pipes (subtle moving dot pulse at hub)
+      if(filled && !t.fixed){
+        const pulse = 0.5 + 0.5 * Math.sin(solveTime * 4 + i);
+        ctx.globalAlpha = 0.25 * pulse;
+        ctx.fillStyle = COL.waterHi;
+        ctx.beginPath(); ctx.arc(cx, cy, pipeW * 0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.restore();
+
+      // source / drain markers (drawn unrotated, always upright)
+      if(t.kind === 'src'){
+        ctx.fillStyle = COL.amber;
+        ctx.beginPath(); ctx.arc(cx, cy, cell * 0.16, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = COL.ink;
+        ctx.beginPath(); ctx.arc(cx, cy, cell * 0.08, 0, Math.PI * 2); ctx.fill();
+      } else if(t.kind === 'drain'){
+        ctx.strokeStyle = filled ? COL.water : COL.red;
+        ctx.lineWidth = Math.max(2, cell * 0.05);
+        ctx.beginPath(); ctx.arc(cx, cy, cell * 0.15, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = filled ? COL.water : COL.red;
+        ctx.beginPath(); ctx.arc(cx, cy, cell * 0.055, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // keyboard cursor
+      if(i === cursor && !won){
+        ctx.strokeStyle = 'rgba(244,237,225,.85)';
+        ctx.lineWidth = Math.max(2, cell * 0.035);
+        roundRect(x + 2, y + 2, w - 4, w - 4, r * 0.8); ctx.stroke();
+      }
+    }
+
+    function render(){
+      // board background (warm screen)
+      const bg = ctx.createLinearGradient(0, 0, 0, size);
+      bg.addColorStop(0, COL.screen); bg.addColorStop(1, COL.bg);
+      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+      ctx.strokeStyle = COL.line2; ctx.lineWidth = 1.5;
+      roundRect(0.75, 0.75, size - 1.5, size - 1.5, size * 0.045); ctx.stroke();
+
+      for(let i = 0; i < N * N; i++) drawTile(i);
+
+      // particles
+      for(const p of parts){
+        ctx.globalAlpha = Math.max(0, p.life);
+        ctx.fillStyle = p.c;
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+      }
+      ctx.globalAlpha = 1;
+
+      // win banner sweep
+      if(won && flowAnim < 1){
+        ctx.fillStyle = 'rgba(108,140,255,' + (0.18 * (1 - flowAnim)) + ')';
+        roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+      }
+
+      // pause veil
+      if(paused){
+        ctx.fillStyle = 'rgba(10,8,6,.72)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+        ctx.fillStyle = COL.text; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '400 ' + Math.floor(size * 0.11) + 'px Anton, system-ui, sans-serif';
+        ctx.fillText('PAUSED', size / 2, size / 2);
+      }
+    }
+
+    // ============================================================ input: tap / click
+    onTap(canvas, (clientX, clientY) => {
+      if(paused || won) return;
+      const rect = canvas.getBoundingClientRect();
+      const lx = clientX - rect.left, ly = clientY - rect.top;
+      const x = Math.floor((lx - pad) / cell), y = Math.floor((ly - pad) / cell);
+      if(x < 0 || x >= N || y < 0 || y >= N) return;
+      cursor = idx(x, y);
+      rotateTile(cursor, false);
+    });
+
+    document.getElementById('newBtn').onclick = reset;
+    document.getElementById('pauseBtn').onclick = togglePause;
+    document.getElementById('again').onclick = () => {
+      if(won) nextLevel();
+      else overEl.classList.remove('gx-show');
+    };
+
+    // ============================================================ keyboard
+    addEventListener('keydown', e => {
+      const k = e.key;
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor(-1, 0); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor(1, 0); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor(0, -1); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); moveCursor(0, 1); }
+      else if(k === ' ' || k === 'Enter'){
+        e.preventDefault();
+        if(won) nextLevel();
+        else if(!paused) rotateTile(cursor, true);
+      }
+      else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
+      else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    function moveCursor(dx, dy){
+      if(paused || won) return;
+      let x = cursor % N, y = (cursor / N) | 0;
+      x = Math.max(0, Math.min(N - 1, x + dx));
+      y = Math.max(0, Math.min(N - 1, y + dy));
+      cursor = idx(x, y);
+      requestFrame();
+    }
+
+    // ============================================================ boot
+    fullReset();
+  </script>
+</body>
+</html>
