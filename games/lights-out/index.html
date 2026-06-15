@@ -226,7 +226,7 @@
     function burst(i, lit){
       const [px, py] = cellXY(i);
       const cx = px + cell / 2, cy = py + cell / 2;
-      const col = lit ? '#c8923a' : '#6f6a3b';
+      const col = lit ? '#f0c46a' : '#8c7a52';
       const count = 9;
       for(let k = 0; k < count; k++){
         const a = (k / count) * Math.PI * 2 + rand() * 0.6;
@@ -321,28 +321,36 @@
       const sc = 1 - flip * 0.12;              // squash pulse on change
       const cw = w * sc, ch = h * sc, cx = x + (w - cw) / 2, cy = y + (h - ch) / 2;
 
-      // base socket (warm shadowed inset behind the tile)
-      ctx.fillStyle = '#3a2e1f';
+      // recessed socket well behind each button (dark console cutout — the
+      // classic Lights Out look: square buttons sunk into a dark panel)
+      ctx.fillStyle = '#2a2016';
       roundRect(x - 1, y - 1, w + 2, h + 2, r + 1); ctx.fill();
 
-      // body fill: muted clay when off, oxblood accent when lit — matte printed ink
-      const offTop = '#cdbf9f', offBot = '#bdae8c';
-      const onTop = '#b5482b', onBot = '#9b3a22';
+      // button body: dark slate-clay when OFF, hot oxblood/ochre when LIT.
+      // Strong off-vs-on contrast is the signature — a clearly "switched on"
+      // light versus a dark dormant one. Matte flat fill, no gloss/bloom.
+      const offTop = '#5a4d39', offBot = '#473c2c';     // dark dormant button
+      const onTop  = '#d2632c', onBot  = '#9b3a22';     // glowing lit button
       const grad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
       grad.addColorStop(0, lerpHex(offTop, onTop, g));
       grad.addColorStop(1, lerpHex(offBot, onBot, g));
       ctx.fillStyle = grad;
       roundRect(cx, cy, cw, ch, r); ctx.fill();
 
-      // flat printed top edge (subtle, no gloss/glow)
-      ctx.fillStyle = 'rgba(255,248,232,' + (0.12 + 0.05 * g) + ')';
-      roundRect(cx + cw * 0.12, cy + ch * 0.10, cw * 0.76, ch * 0.22, r * 0.7); ctx.fill();
+      // flat top-facet highlight — stronger when lit so the button reads as
+      // genuinely illuminated (still flat, no radial glow)
+      ctx.fillStyle = 'rgba(255,244,224,' + (0.06 + 0.18 * g) + ')';
+      roundRect(cx + cw * 0.12, cy + ch * 0.10, cw * 0.76, ch * 0.24, r * 0.7); ctx.fill();
 
-      // lit inner mark (flat ochre register, no glow)
-      if(g > 0.5){
-        ctx.strokeStyle = 'rgba(245,232,205,' + (0.32 * (g - 0.5) * 2) + ')';
-        ctx.lineWidth = Math.max(1, cell * 0.02);
-        roundRect(cx + cw * 0.22, cy + ch * 0.22, cw * 0.56, ch * 0.56, r * 0.6); ctx.stroke();
+      // lit inner register mark — a bright ochre square inset, the classic
+      // "lamp on" tell, fading in with the glow
+      if(g > 0.4){
+        const a = (g - 0.4) / 0.6;
+        ctx.fillStyle = 'rgba(248,224,170,' + (0.30 * a) + ')';
+        roundRect(cx + cw * 0.26, cy + ch * 0.26, cw * 0.48, ch * 0.48, r * 0.55); ctx.fill();
+        ctx.strokeStyle = 'rgba(252,236,200,' + (0.42 * a) + ')';
+        ctx.lineWidth = Math.max(1, cell * 0.022);
+        roundRect(cx + cw * 0.20, cy + ch * 0.20, cw * 0.60, ch * 0.60, r * 0.6); ctx.stroke();
       }
 
       // hint marker (oxblood dashed register)
@@ -354,9 +362,9 @@
         ctx.setLineDash([]);
       }
 
-      // keyboard cursor (warm ink ring)
+      // keyboard cursor (warm cream ring — visible against dark panel + buttons)
       if(i === cursor){
-        ctx.strokeStyle = 'rgba(34,31,23,.55)';
+        ctx.strokeStyle = 'rgba(243,236,224,.78)';
         ctx.lineWidth = Math.max(2, cell * 0.035);
         roundRect(cx + 3, cy + 3, cw - 6, ch - 6, r * 0.7); ctx.stroke();
       }
@@ -378,8 +386,12 @@
     function render(){
       // clear every frame (in CSS px; transform already scales to device px)
       ctx.clearRect(0, 0, size, size);
-      // board background — flat warm cream panel
-      ctx.fillStyle = '#e6dabf'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      // board background — dark matte console panel framed by a warm bezel,
+      // so the lit buttons read as a grid of glowing lights (the classic look)
+      ctx.fillStyle = '#3a2e1f'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      const bz = pad * 0.45;
+      ctx.fillStyle = '#241c12';
+      roundRect(bz, bz, size - bz * 2, size - bz * 2, size * 0.04); ctx.fill();
 
       for(let i = 0; i < N * N; i++) drawCell(i);
 

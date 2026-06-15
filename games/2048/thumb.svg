@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#f3ece0"/>
+  <!-- board -->
+  <rect x="96" y="36" width="128" height="128" rx="10" fill="#cdbb96"/>
+  <!-- 4x4 grid of tiles: cream low tiles, orange ladder, oxblood apex -->
+  <!-- row 1 -->
+  <rect x="104" y="44" width="24" height="24" rx="4" fill="#efe7d3"/>
+  <rect x="132" y="44" width="24" height="24" rx="4" fill="#e8a96a"/>
+  <rect x="160" y="44" width="24" height="24" rx="4" fill="#efe7d3"/>
+  <rect x="188" y="44" width="24" height="24" rx="4" fill="#dd6f3c"/>
+  <!-- row 2 -->
+  <rect x="104" y="72" width="24" height="24" rx="4" fill="#e08a4c"/>
+  <rect x="132" y="72" width="24" height="24" rx="4" fill="#efe7d3"/>
+  <rect x="160" y="72" width="24" height="24" rx="4" fill="#d4c2a0"/>
+  <rect x="188" y="72" width="24" height="24" rx="4" fill="#d8b748"/>
+  <!-- row 3: a wide merged tile -->
+  <rect x="104" y="100" width="52" height="24" rx="4" fill="#9b3a22"/>
+  <rect x="160" y="100" width="24" height="24" rx="4" fill="#e8a96a"/>
+  <rect x="188" y="100" width="24" height="24" rx="4" fill="#d4c2a0"/>
+  <!-- row 4 -->
+  <rect x="104" y="128" width="24" height="24" rx="4" fill="#d8b748"/>
+  <rect x="132" y="128" width="24" height="24" rx="4" fill="#dd6f3c"/>
+  <rect x="160" y="128" width="52" height="24" rx="4" fill="#6f6a3b"/>
+  <!-- merge arrow hint pointing into the board -->
+  <path d="M64 100 L86 100 M78 92 L86 100 L78 108" fill="none" stroke="#221f17" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

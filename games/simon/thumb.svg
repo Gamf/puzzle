@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200">
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- dark disc casing -->
+  <circle cx="160" cy="100" r="84" fill="#221f17"/>
+  <!-- four quarter-ring pads (green / red / blue / yellow) -->
+  <!-- top-left green -->
+  <path d="M160 100 L160 18 A82 82 0 0 0 78 100 Z" fill="#3f8f4e"/>
+  <!-- top-right red -->
+  <path d="M160 100 L242 100 A82 82 0 0 0 160 18 Z" fill="#b23b2f"/>
+  <!-- bottom-left blue -->
+  <path d="M160 100 L78 100 A82 82 0 0 0 160 182 Z" fill="#2f6fae"/>
+  <!-- bottom-right yellow -->
+  <path d="M160 100 L160 182 A82 82 0 0 0 242 100 Z" fill="#d8a02e"/>
+  <!-- cross gaps -->
+  <rect x="156" y="18" width="8" height="164" fill="#221f17"/>
+  <rect x="78" y="96" width="164" height="8" fill="#221f17"/>
+  <!-- center hub -->
+  <circle cx="160" cy="100" r="34" fill="#221f17"/>
+  <circle cx="160" cy="100" r="27" fill="#efe6d2"/>
+  <!-- little sequence pips on the hub -->
+  <circle cx="150" cy="100" r="4" fill="#9b3a22"/>
+  <circle cx="160" cy="100" r="4" fill="#c8923a"/>
+  <circle cx="170" cy="100" r="4" fill="#6f6a3b"/>
+</svg>

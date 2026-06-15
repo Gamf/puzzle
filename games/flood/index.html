@@ -110,15 +110,18 @@
     const NCOLORS = 6;                           // number of colors in the palette
     const MOVE_CAP = 30;                         // generous move budget; fail if exceeded without filling
 
-    // Matte printed-ink earth palette: six flat swatches that read distinctly on
-    // the cream board. Oxblood is the single apex accent.
+    // Flood It's signature is six CLEARLY DISTINCT flat colours filling the grid
+    // — that's what a player recognises at a glance. These are matte, slightly
+    // muted hues (no neon) so the board stays calm and editorial, but each colour
+    // reads unmistakably apart: red, orange, gold, green, blue, plum. Oxblood-red
+    // sits first as the genre accent.
     const COLORS = [
-      '#9b3a22', // oxblood — the accent
-      '#c8923a', // ochre
-      '#6f6a3b', // olive
-      '#a4623a', // clay
-      '#4a3b2a', // warm brown
-      '#d9bd86', // pale ochre
+      '#c0432a', // red
+      '#d98a3a', // orange
+      '#e3c04a', // gold
+      '#5d8a4a', // green
+      '#3f6f9b', // blue
+      '#7a4e84', // plum
     ];
 
     const canvas = document.getElementById('c');
@@ -408,9 +411,9 @@
       if(!cells) return;                       // guard: nothing to draw before the first board exists
       // clear the full canvas each frame so the rounded-panel corners never ghost
       ctx.clearRect(0, 0, size, size);
-      // board background — flat warm sheet (the printed board)
-      ctx.fillStyle = '#e2d6b8'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
-      ctx.strokeStyle = '#d4c8aa'; ctx.lineWidth = 1;
+      // board background — flat warm cream sheet so the colourful tiles read clearly
+      ctx.fillStyle = '#f3ece0'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
+      ctx.strokeStyle = '#e2d6b8'; ctx.lineWidth = 1;
       roundRect(0.5, 0.5, size - 1, size - 1, size * 0.03); ctx.stroke();
 
       for(let i = 0; i < N * N; i++) drawCell(i);

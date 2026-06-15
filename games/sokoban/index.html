@@ -120,6 +120,7 @@
     let targets;                   // Set of target indices
     let boxes;                     // Set of box indices (mutable)
     let px = 0, py = 0;            // player cell
+    let pdir = 'down';            // facing direction (for the warehouse-keeper look)
     let pushes = 0, won = false, paused = false;
     let best = 0;
     let history = [];             // undo stack of snapshots
@@ -317,6 +318,7 @@
     function move(dirKey){
       if(paused || won) return;
       const d = DIRS[dirKey]; if(!d) return;
+      pdir = dirKey;
       const nx = px + d[0], ny = py + d[1], ni = idx(nx, ny);
       if(nx < 0 || ny < 0 || nx >= W || ny >= H || walls[ni]) return;   // wall
       let pushed = false;
@@ -382,7 +384,7 @@
     function nextLevel(){ level++; startLevel(); }
 
     function startLevel(){
-      pushes = 0; won = false; paused = false;
+      pushes = 0; won = false; paused = false; pdir = 'down';
       history = []; prevState = null; parts = []; anim.t = 1;
       levelEl.textContent = level;
       pushesEl.textContent = pushes;
@@ -478,6 +480,7 @@
     }
 
     function drawFloor(x, y){
+      // warm warehouse-floor tiling (classic Sokoban: a plain tiled stockroom floor)
       const gx = Math.round((x - ox) / cell), gy = Math.round((y - oy) / cell);
       ctx.fillStyle = ((gx + gy) & 1) ? '#e7dcc4' : '#efe6d2';
       ctx.fillRect(x, y, cell, cell);
@@ -485,49 +488,74 @@
       ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     }
     function drawWall(x, y){
-      const p = cell * 0.04;
-      ctx.fillStyle = '#4a3b2a';
-      roundRect(x + p, y + p, cell - p*2, cell - p*2, cell * 0.12); ctx.fill();
-      ctx.fillStyle = '#3a2e20';
-      roundRect(x + p, y + cell*0.46, cell - p*2, cell*0.5 - p, cell * 0.1); ctx.fill();
-      // brick seam (flat, printed)
-      ctx.strokeStyle = 'rgba(34,31,23,.35)'; ctx.lineWidth = Math.max(1, cell*0.03);
-      ctx.beginPath(); ctx.moveTo(x + p, y + cell*0.46); ctx.lineTo(x + cell - p, y + cell*0.46); ctx.stroke();
+      // classic Sokoban warehouse wall: solid stacked brick blocks, flat & matte
+      const p = cell * 0.03;
+      ctx.fillStyle = '#6f6a3b';                 // olive block body
+      roundRect(x + p, y + p, cell - p*2, cell - p*2, cell * 0.1); ctx.fill();
+      // running-bond brick seams (printed ink lines), 2 rows, offset
+      ctx.strokeStyle = 'rgba(34,31,23,.38)';
+      ctx.lineWidth = Math.max(1, cell * 0.035);
+      ctx.beginPath();
+      // horizontal courses
+      ctx.moveTo(x + p, y + cell*0.5); ctx.lineTo(x + cell - p, y + cell*0.5);
+      // vertical joints, offset between courses
+      ctx.moveTo(x + cell*0.5, y + p);    ctx.lineTo(x + cell*0.5, y + cell*0.5);
+      ctx.moveTo(x + cell*0.28, y + cell*0.5); ctx.lineTo(x + cell*0.28, y + cell - p);
+      ctx.moveTo(x + cell*0.72, y + cell*0.5); ctx.lineTo(x + cell*0.72, y + cell - p);
+      ctx.stroke();
     }
     function drawTarget(x, y){
-      const cx = x + cell/2, cy = y + cell/2, r = cell * 0.20;
+      // classic Sokoban goal marker: a clear diamond pip on the floor
+      const cx = x + cell/2, cy = y + cell/2, r = cell * 0.18;
       ctx.save();
-      ctx.strokeStyle = 'rgba(200,146,58,.9)'; ctx.lineWidth = Math.max(2, cell * 0.05);
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-      ctx.fillStyle = 'rgba(200,146,58,.22)';
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, Math.PI*2); ctx.fill();
+      ctx.translate(cx, cy); ctx.rotate(Math.PI / 4);
+      ctx.strokeStyle = '#9b3a22'; ctx.lineWidth = Math.max(2, cell * 0.05);
+      ctx.strokeRect(-r, -r, r*2, r*2);
+      ctx.fillStyle = 'rgba(155,58,34,.20)';
+      ctx.fillRect(-r*0.55, -r*0.55, r*1.1, r*1.1);
       ctx.restore();
     }
     function drawBox(x, y, onTarget){
+      // classic Sokoban wooden crate: a framed plank panel with corner brackets.
       const m = cell * 0.12;
-      const bx = x + m, by = y + m, bw = cell - m*2, bh = cell - m*2, r = cell * 0.14;
-      // flat matte crate (no glow, no gradient)
+      const bx = x + m, by = y + m, bw = cell - m*2, bh = cell - m*2, r = cell * 0.08;
+      // crate body — warm wood; ochre when seated on a goal (the satisfying "done" colour)
       ctx.fillStyle = onTarget ? '#c8923a' : '#a4623a';
       roundRect(bx, by, bw, bh, r); ctx.fill();
-      // crate cross-bracing + frame, printed ink
-      ctx.strokeStyle = onTarget ? 'rgba(34,31,23,.5)' : 'rgba(34,31,23,.55)';
-      ctx.lineWidth = Math.max(1.5, cell * 0.035);
-      ctx.beginPath();
-      ctx.moveTo(bx, by); ctx.lineTo(bx + bw, by + bh);
-      ctx.moveTo(bx + bw, by); ctx.lineTo(bx, by + bh);
-      ctx.stroke();
+      // outer frame
+      ctx.strokeStyle = 'rgba(34,31,23,.55)';
+      ctx.lineWidth = Math.max(1.5, cell * 0.04);
       roundRect(bx, by, bw, bh, r); ctx.stroke();
+      // inset panel (the framed-crate signature look)
+      const ip = bw * 0.16;
+      ctx.lineWidth = Math.max(1, cell * 0.028);
+      ctx.strokeRect(bx + ip, by + ip, bw - ip*2, bh - ip*2);
+      // corner bracket nails (four dots), printed ink
+      ctx.fillStyle = 'rgba(34,31,23,.5)';
+      const nr = Math.max(1, cell * 0.03), npad = bw * 0.22;
+      for(const [dx, dy] of [[npad, npad], [bw - npad, npad], [npad, bh - npad], [bw - npad, bh - npad]]){
+        ctx.beginPath(); ctx.arc(bx + dx, by + dy, nr, 0, Math.PI*2); ctx.fill();
+      }
     }
     function drawPlayer(x, y){
+      // the warehouse keeper: a little round worker with a cap, facing the way he moves
       const cx = x + cell/2, cy = y + cell/2;
       const r = cell * 0.30;
-      // flat oxblood disc (single accent, no glow)
+      // body — oxblood disc (single accent, flat matte)
       ctx.fillStyle = '#9b3a22';
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
-      // cream eyes (printed)
+      // cap band across the top (ochre) — gives the "worker" read
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
+      ctx.fillStyle = '#c8923a';
+      ctx.fillRect(cx - r, cy - r, r*2, r*0.62);
+      ctx.restore();
+      // eyes (cream), shifted toward the facing direction
+      const fd = DIRS[pdir] || [0, 1];
+      const ex = fd[0] * r * 0.18, ey = fd[1] * r * 0.18;
       ctx.fillStyle = '#efe6d2';
-      ctx.beginPath(); ctx.arc(cx - r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx + r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - r*0.32 + ex, cy + r*0.08 + ey, r*0.16, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + r*0.32 + ex, cy + r*0.08 + ey, r*0.16, 0, Math.PI*2); ctx.fill();
     }
 
     // ---- input: tap on board moves player toward the tapped cell (1 step) ----

@@ -126,27 +126,29 @@
 
     function cellXY(x, y){ return [gap + x * (cell + gap), gap + y * (cell + gap)]; }
 
-    // ---- tile colours: matte printed-ink earth tones, oxblood as the apex accent ----
-    // Each entry is a flat printed swatch; the 2048 win tile is the single oxblood accent.
+    // ---- tile colours: the ICONIC 2048 cream-to-orange ladder, redrawn matte ----
+    // Recognisable signature of classic 2048: pale cream 2/4 tiles, then a warm
+    // orange progression climbing to deep orange-red, with a gold flourish on the
+    // top tiles. Done flat/matte (no glow, no gloss) to stay tasteful & on-brand.
     const TILE_COLOURS = {
-      2:    '#efe7d3',  // pale sheet
-      4:    '#e6d9b8',  // light ochre
-      8:    '#d9bd86',  // ochre
-      16:   '#c8923a',  // ochre deep
-      32:   '#b9803a',  // clay light
-      64:   '#a4623a',  // clay
-      128:  '#8c5a30',  // warm brown light
-      256:  '#6f6a3b',  // olive
-      512:  '#5d5a33',  // olive deep
-      1024: '#4a3b2a',  // warm brown
-      2048: '#9b3a22'   // oxblood — the apex accent
+      2:    '#efe7d3',  // pale cream sheet
+      4:    '#ece0c2',  // warm cream
+      8:    '#e8a96a',  // soft orange
+      16:   '#e08a4c',  // orange
+      32:   '#dd6f3c',  // deep orange
+      64:   '#d4542c',  // orange-red
+      128:  '#dcc15a',  // gold light
+      256:  '#d8b748',  // gold
+      512:  '#d3ad36',  // deep gold
+      1024: '#cda224',  // amber gold
+      2048: '#9b3a22'   // oxblood apex — the win tile
     };
     function tint(v){
-      if(!v) return '#e7dcc2';                       // empty cell ink-wash
+      if(!v) return '#e7dcc2';                       // empty cell warm wash
       return TILE_COLOURS[v] || '#9b3a22';           // beyond 2048 stays oxblood
     }
-    // Dark ink on pale tiles, cream ink on dark tiles.
-    function txtColor(v){ return (v && v <= 8) ? '#221f17' : '#f3ece0'; }
+    // Dark ink on the pale 2/4 tiles, cream ink on the coloured tiles.
+    function txtColor(v){ return (v && v <= 4) ? '#221f17' : '#f3ece0'; }
 
     // ---- helpers ----
     function emptyGrid(){ return Array.from({length:N}, () => Array(N).fill(0)); }
@@ -362,8 +364,8 @@
       // clear every frame so sliding tiles / particles never ghost in the
       // rounded board corners (which the board background does not cover)
       ctx.clearRect(0, 0, size, size);
-      // board background — flat warm sheet (the printed board)
-      ctx.fillStyle = '#e2d6b8'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
+      // board background — flat warm tan sheet (the classic 2048 board)
+      ctx.fillStyle = '#cdbb96'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
       // empty cells — slightly recessed warm wash
       for(let y=0;y<N;y++) for(let x=0;x<N;x++){
         const [px, py] = cellXY(x, y);

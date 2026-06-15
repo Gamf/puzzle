@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <!-- warm warehouse-floor backdrop -->
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- floor tiling (a couple of checker tiles for the stockroom read) -->
+  <rect x="36" y="120" width="40" height="40" fill="#e7dcc4"/>
+  <rect x="116" y="120" width="40" height="40" fill="#e7dcc4"/>
+  <rect x="196" y="120" width="40" height="40" fill="#e7dcc4"/>
+  <rect x="76" y="160" width="40" height="20" fill="#e7dcc4"/>
+  <rect x="156" y="160" width="40" height="20" fill="#e7dcc4"/>
+
+  <!-- warehouse wall blocks along the top (olive brick) -->
+  <rect x="20" y="22" width="62" height="40" rx="5" fill="#6f6a3b"/>
+  <rect x="86" y="22" width="62" height="40" rx="5" fill="#6f6a3b"/>
+  <rect x="238" y="22" width="62" height="40" rx="5" fill="#6f6a3b"/>
+  <line x1="20" y1="42" x2="82" y2="42" stroke="#221f17" stroke-width="2" opacity="0.4"/>
+  <line x1="51" y1="22" x2="51" y2="42" stroke="#221f17" stroke-width="2" opacity="0.4"/>
+  <line x1="269" y1="22" x2="269" y2="42" stroke="#221f17" stroke-width="2" opacity="0.4"/>
+
+  <!-- goal marker: oxblood diamond pip on the floor -->
+  <g transform="translate(244 138) rotate(45)">
+    <rect x="-14" y="-14" width="28" height="28" fill="none" stroke="#9b3a22" stroke-width="4"/>
+    <rect x="-7" y="-7" width="14" height="14" fill="#9b3a22" opacity="0.22"/>
+  </g>
+
+  <!-- wooden crate: framed plank panel with corner nails -->
+  <g transform="translate(120 100)">
+    <rect x="0" y="0" width="64" height="64" rx="5" fill="#a4623a"/>
+    <rect x="0" y="0" width="64" height="64" rx="5" fill="none" stroke="#221f17" stroke-width="4" opacity="0.6"/>
+    <rect x="11" y="11" width="42" height="42" fill="none" stroke="#221f17" stroke-width="3" opacity="0.55"/>
+    <circle cx="15" cy="15" r="3" fill="#221f17" opacity="0.55"/>
+    <circle cx="49" cy="15" r="3" fill="#221f17" opacity="0.55"/>
+    <circle cx="15" cy="49" r="3" fill="#221f17" opacity="0.55"/>
+    <circle cx="49" cy="49" r="3" fill="#221f17" opacity="0.55"/>
+  </g>
+
+  <!-- warehouse keeper: round worker with an ochre cap, pushing toward the crate -->
+  <g transform="translate(74 132)">
+    <circle cx="0" cy="0" r="22" fill="#9b3a22"/>
+    <path d="M -22 -2 A 22 22 0 0 1 22 -2 L 22 -8 A 22 22 0 0 0 -22 -8 Z" fill="#c8923a"/>
+    <circle cx="6" cy="4" r="4" fill="#efe6d2"/>
+    <circle cx="17" cy="4" r="4" fill="#efe6d2"/>
+  </g>
+</svg>

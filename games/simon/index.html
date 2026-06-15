@@ -96,14 +96,18 @@
     function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
     function randInt(n){ return Math.floor(rand() * n); }
 
-    // ---- pads: 4 quadrants. Warm print palette: oxblood, ochre, olive, clay ----
-    // Matte printed-ink tones that read clearly on the cream catalogue plate.
-    // `lit` is a brighter wash of the same ink (no glow); `tint` colours feedback flecks.
+    // ---- pads: 4 quadrants in Simon's iconic colour identity ----
+    // The classic memory disc reads as RED / GREEN / BLUE / YELLOW quadrants,
+    // so we keep that signature here (recognisability) but render every tone as a
+    // flat MATTE ink — no neon, no glow. `base` is the resting pad colour, `lit`
+    // is a slightly brighter wash of the same hue used for a flash, and `tint`
+    // colours the little feedback flecks. Quadrant order is [TL, TR, BL, BR],
+    // which lays out as Simon's green/red/blue/yellow wheel.
     const PADS = [
-      { name: 'oxblood', base: '#9b3a22', lit: '#c8543a', tint: '#c8543a', freq: 415.30 }, // top-left (accent)
-      { name: 'ochre',   base: '#c8923a', lit: '#e0b261', tint: '#e0b261', freq: 311.13 }, // top-right
-      { name: 'olive',   base: '#6f6a3b', lit: '#9a945c', tint: '#9a945c', freq: 261.63 }, // bottom-left
-      { name: 'clay',    base: '#a4623a', lit: '#c4855c', tint: '#c4855c', freq: 349.23 }, // bottom-right
+      { name: 'green',  base: '#3f8f4e', lit: '#6cc079', tint: '#6cc079', freq: 415.30 }, // top-left
+      { name: 'red',    base: '#b23b2f', lit: '#e0665a', tint: '#e0665a', freq: 311.13 }, // top-right
+      { name: 'blue',   base: '#2f6fae', lit: '#5fa0da', tint: '#5fa0da', freq: 261.63 }, // bottom-left
+      { name: 'yellow', base: '#d8a02e', lit: '#f0c45c', tint: '#f0c45c', freq: 349.23 }, // bottom-right
     ];
     // keyboard mapping: arrow/WASD -> pad index (TL, TR, BL, BR)
     // Up=TL? We instead map the 4 arrows to the 4 pads spatially via a helper.
@@ -177,10 +181,10 @@
     addEventListener('resize', fit);
 
     // Each pad is a quarter-ring (annulus quadrant). Angles, in canvas radians:
-    //  0: red   top-left   -> 180deg..270deg
-    //  1: amber top-right  -> 270deg..360deg
-    //  2: teal  bottom-left-> 90deg..180deg
-    //  3: bone  bottom-right->0deg..90deg
+    //  0: green  top-left   -> 180deg..270deg
+    //  1: red    top-right  -> 270deg..360deg
+    //  2: blue   bottom-left-> 90deg..180deg
+    //  3: yellow bottom-right->0deg..90deg
     const PAD_ANG = [
       [Math.PI, Math.PI * 1.5],        // TL
       [Math.PI * 1.5, Math.PI * 2],    // TR
@@ -563,10 +567,10 @@
     // Simon's four pads sit in the four corners of the disc, so the D-pad maps
     // straight onto them spatially: each direction PRESSES one colour pad
     // instantly (no cursor to chase). It's a step game, so hold:false.
-    //   Up = Top-Left (oxblood)   ◀ none of the indirection of the old cursor
-    //   Left = Bottom-Left (olive)
-    //   Right = Top-Right (ochre)
-    //   Down = Bottom-Right (clay)
+    //   Up = Top-Left (green)   ◀ none of the indirection of the old cursor
+    //   Left = Bottom-Left (blue)
+    //   Right = Top-Right (red)
+    //   Down = Bottom-Right (yellow)
     // (each arrow points toward the half its pad lives in; this matches how the
     // four pads read on screen.) A single big primary button starts / replays.
     function tapPad(i){ ensureAudio(); cursor = i; if(phase === 'input') pressPad(i); requestFrame(); }

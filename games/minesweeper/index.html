@@ -78,10 +78,12 @@
     const COLS=9, ROWS=9, MINES=10;
     const BEST_KEY='gamf-puzzle-minesweeper-best';
     const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
-    const NUMCOL=['','#6f6a3b','#4a3b2a','#a4623a','#221f17','#c8923a','#6f6a3b','#4a3b2a','#a4623a'];
+    // Classic Minesweeper per-number colour identity (1 blue, 2 green, 3 red, 4 navy,
+    // 5 maroon, 6 teal, 7 black, 8 grey) — the recognisable signature of the original.
+    const NUMCOL=['','#2546c8','#2f7d32','#c5251c','#1a237e','#7a1f12','#0f7d7d','#221f17','#6b6b6b'];
     let cell=36, dpr=1;
     let grid, revealed, flagged, mineMap, started, gameOver, win, firstClick, time, timer=null, parts=[];
-    let cursor={x:0,y:0}, flagMode=false, newBest=false, paused=false;
+    let cursor={x:0,y:0}, flagMode=false, newBest=false, paused=false, hitCell=null;
     let best=parseInt(localStorage.getItem(BEST_KEY)||'0',10)||0;
     document.getElementById('best').textContent=best?best+'s':'—';
     document.getElementById('mineCount').textContent=MINES;
@@ -100,7 +102,7 @@
       revealed=Array.from({length:ROWS},()=>Array(COLS).fill(false));
       flagged=Array.from({length:ROWS},()=>Array(COLS).fill(false));
       mineMap=Array.from({length:ROWS},()=>Array(COLS).fill(false));
-      started=false; gameOver=false; win=false; firstClick=true; time=0; parts=[]; newBest=false; paused=false;
+      started=false; gameOver=false; win=false; firstClick=true; time=0; parts=[]; newBest=false; paused=false; hitCell=null;
       cursor={x:Math.floor(COLS/2),y:Math.floor(ROWS/2)};
       if(timer){clearInterval(timer);timer=null;}
       document.getElementById('time').textContent='0';
@@ -132,7 +134,7 @@
 
     function reveal(x,y){ if(gameOver||paused||revealed[y][x]||flagged[y][x]) return;
       if(firstClick){ placeMines(x,y); firstClick=false; started=true; startTimer(); }
-      if(mineMap[y][x]){ revealed[y][x]=true; burstMine(x,y); loseGame(); return; }
+      if(mineMap[y][x]){ revealed[y][x]=true; hitCell=[x,y]; burstMine(x,y); loseGame(); return; }
       flood(x,y); checkWin(); }
 
     function toggleFlag(x,y){ if(gameOver||paused||revealed[y][x]) return;
@@ -174,26 +176,54 @@
     function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
       ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
+    // Classic raised "button" tile: light top/left bevel, dark bottom/right bevel.
+    function raisedTile(px,py){ const b=Math.max(2,Math.round(cell*0.12));
+      ctx.fillStyle='#cabea0'; ctx.fillRect(px,py,cell,cell);                 // tile face
+      ctx.fillStyle='#efe6d2';                                                // light bevel (top+left)
+      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(px+cell,py); ctx.lineTo(px+cell-b,py+b);
+      ctx.lineTo(px+b,py+b); ctx.lineTo(px+b,py+cell-b); ctx.lineTo(px,py+cell); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#9b8a63';                                                // dark bevel (bottom+right)
+      ctx.beginPath(); ctx.moveTo(px+cell,py); ctx.lineTo(px+cell,py+cell); ctx.lineTo(px,py+cell);
+      ctx.lineTo(px+b,py+cell-b); ctx.lineTo(px+cell-b,py+cell-b); ctx.lineTo(px+cell-b,py+b); ctx.closePath(); ctx.fill(); }
+
+    // Sunken revealed cell: thin dark frame, flat light face.
+    function sunkenTile(px,py){ ctx.fillStyle='#9b8a63'; ctx.fillRect(px,py,cell,cell);
+      ctx.fillStyle='#efe6d2'; ctx.fillRect(px+1,py+1,cell-1,cell-1); }
+
+    function drawFlag(px,py){ const cx=px+cell/2, s=cell;
+      ctx.strokeStyle='#221f17'; ctx.lineWidth=Math.max(1.5,s*0.06);          // pole
+      ctx.beginPath(); ctx.moveTo(cx,py+s*0.74); ctx.lineTo(cx,py+s*0.30); ctx.stroke();
+      ctx.fillStyle='#221f17';                                               // base
+      ctx.fillRect(cx-s*0.18,py+s*0.74,s*0.36,Math.max(2,s*0.07));
+      ctx.fillStyle='#c5251c';                                               // red triangular flag
+      ctx.beginPath(); ctx.moveTo(cx,py+s*0.28); ctx.lineTo(cx-s*0.26,py+s*0.40);
+      ctx.lineTo(cx,py+s*0.52); ctx.closePath(); ctx.fill(); }
+
+    function drawMine(px,py,hit){ const cx=px+cell/2, cy=py+cell/2, r=cell*0.22;
+      if(hit){ ctx.fillStyle='#c5251c'; ctx.fillRect(px+1,py+1,cell-1,cell-1); } // detonated cell = red flash
+      ctx.strokeStyle='#221f17'; ctx.lineWidth=Math.max(1.5,cell*0.06);
+      for(let i=0;i<8;i++){ const a=i*Math.PI/4;                              // 8 spikes
+        ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+Math.cos(a)*r*1.5,cy+Math.sin(a)*r*1.5); ctx.stroke(); }
+      ctx.fillStyle='#221f17'; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#efe6d2'; ctx.beginPath(); ctx.arc(cx-r*0.35,cy-r*0.35,r*0.3,0,Math.PI*2); ctx.fill(); } // highlight
+
     function draw(){ const W=COLS*cell, H=ROWS*cell;
-      ctx.fillStyle='#e4d8be'; roundRect(0,0,W,H,14); ctx.fill();
-      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ const px=x*cell, py=y*cell, m=2;
+      ctx.fillStyle='#bdae8c'; ctx.fillRect(0,0,W,H);                          // classic grey-board frame (warm-toned)
+      for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ const px=x*cell, py=y*cell;
         if(revealed[y][x]){
-          ctx.fillStyle='#efe6d2'; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
-          if(mineMap[y][x]){ ctx.fillStyle='#9b3a22';
-            ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,cell*0.22,0,Math.PI*2); ctx.fill(); }
+          sunkenTile(px,py);
+          if(mineMap[y][x]){ drawMine(px,py,!!(hitCell&&hitCell[0]===x&&hitCell[1]===y)); }
           else if(grid[y][x]>0){ ctx.fillStyle=NUMCOL[grid[y][x]];
-            ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='800 '+Math.floor(cell*0.5)+'px system-ui';
+            ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='900 '+Math.floor(cell*0.56)+'px system-ui';
             ctx.fillText(grid[y][x],px+cell/2,py+cell/2+1); }
         } else {
-          ctx.fillStyle='#c8923a'; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
-          ctx.fillStyle='rgba(255,255,255,.12)'; roundRect(px+m,py+m,cell-m*2,Math.max(3,cell*.2),4); ctx.fill();
-          if(flagged[y][x]){ ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=Math.floor(cell*0.5)+'px system-ui';
-            ctx.fillText('🚩',px+cell/2,py+cell/2+1); }
+          raisedTile(px,py);
+          if(flagged[y][x]) drawFlag(px,py);
         }
       }
       if(!gameOver){ const px=cursor.x*cell, py=cursor.y*cell;
         ctx.strokeStyle='#9b3a22'; ctx.lineWidth=2.5;
-        roundRect(px+2,py+2,cell-4,cell-4,5); ctx.stroke(); }
+        ctx.strokeRect(px+2,py+2,cell-4,cell-4); }
       for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c;
         ctx.fillRect(p.x-2,p.y-2,4,4); }
       ctx.globalAlpha=1; }

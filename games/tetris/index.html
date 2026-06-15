@@ -76,7 +76,9 @@
     const SHAPES={
       I:[[1,1,1,1]], O:[[1,1],[1,1]], T:[[0,1,0],[1,1,1]],
       S:[[0,1,1],[1,1,0]], Z:[[1,1,0],[0,1,1]], J:[[1,0,0],[1,1,1]], L:[[0,0,1],[1,1,1]] };
-    const COLORS={I:'#9b3a22',O:'#c8923a',T:'#6f6a3b',S:'#6f6a3b',Z:'#a4623a',J:'#4a3b2a',L:'#c8923a'};
+    // Iconic Tetris per-shape colour identity (matte, slightly muted to stay tasteful):
+    // I cyan · O yellow · T purple · S green · Z red · J blue · L orange.
+    const COLORS={I:'#2fb6c4',O:'#d9b13a',T:'#8a4fb0',S:'#5aa84a',Z:'#c14438',J:'#3a64b0',L:'#cf7a2c'};
     const KEYS=Object.keys(SHAPES);
 
     let grid, piece, score, level, lines, dropMs, acc, last, gameOver, paused, parts=[];
@@ -136,8 +138,8 @@
 
     function ghostY(){ let dy=0; while(!collides(piece,0,dy+1)) dy++; return dy; }
     function draw(){ const W=COLS*cell, H=ROWS*cell;
-      ctx.fillStyle='#e7dcc4'; ctx.fillRect(0,0,W,H);
-      ctx.strokeStyle='rgba(34,31,23,.08)'; ctx.lineWidth=1;
+      ctx.fillStyle='#2b2a33'; ctx.fillRect(0,0,W,H);
+      ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1;
       for(let x=1;x<COLS;x++){ ctx.beginPath(); ctx.moveTo(x*cell,0); ctx.lineTo(x*cell,H); ctx.stroke(); }
       for(let y=1;y<ROWS;y++){ ctx.beginPath(); ctx.moveTo(0,y*cell); ctx.lineTo(W,y*cell); ctx.stroke(); }
       for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++) if(grid[y][x]) block(x,y,grid[y][x]);
@@ -147,8 +149,8 @@
       for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c;
         ctx.fillRect(p.x-2,p.y-2,4,4); }
       ctx.globalAlpha=1;
-      if(paused){ ctx.fillStyle='rgba(239,230,210,.78)'; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle='#221f17'; ctx.font='700 '+Math.floor(cell*1.1)+'px system-ui'; ctx.textAlign='center';
+      if(paused){ ctx.fillStyle='rgba(43,42,51,.82)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#efe6d2'; ctx.font='700 '+Math.floor(cell*1.1)+'px system-ui'; ctx.textAlign='center';
         ctx.fillText('Paused',W/2,H/2); ctx.textAlign='left'; } }
 
     function end(){ gameOver=true;

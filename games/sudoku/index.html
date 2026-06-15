@@ -421,6 +421,12 @@
         const sameLine = (r === cr || c === cc);
         const sameBox = (r >= cbr && r < cbr + BR && c >= cbc && c < cbc + BC);
 
+        // given-clue cells — faint printed-paper shade so the puzzle's fixed
+        // scaffolding reads at a glance (the classic Sudoku "printed clue" look)
+        if(given[i]){
+          ctx.fillStyle = 'rgba(74,59,42,.06)';
+          ctx.fillRect(px, py, cell, cell);
+        }
         // peer highlight wash — faint warm tan
         if((sameLine || sameBox) && i !== cursor){
           ctx.fillStyle = 'rgba(74,59,42,.07)';
@@ -445,12 +451,14 @@
           ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
         }
 
-        // value
+        // value — printed clues are heavy black-ink (the fixed scaffold),
+        // player entries lighter (the classic Sudoku given-vs-entry contrast)
         const v = board[i];
         if(v){
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.font = '400 ' + Math.floor(cell * 0.56) + 'px ' + fontDisplay();
-          ctx.fillStyle = conflict[i] ? COL.oxblood : (given[i] ? COL.given : COL.ink);
+          const wt = given[i] ? '900 ' : '600 ';
+          ctx.font = wt + Math.floor(cell * (given[i] ? 0.58 : 0.54)) + 'px ' + fontDisplay();
+          ctx.fillStyle = conflict[i] ? COL.oxblood : (given[i] ? COL.ink : COL.olive);
           ctx.fillText(String(v), px + cell / 2, py + cell / 2 + cell * 0.02);
         }
       }
@@ -464,8 +472,11 @@
         ctx.beginPath(); ctx.moveTo(p, gpad); ctx.lineTo(p, gpad + N * cell); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(gpad, p); ctx.lineTo(gpad + N * cell, p); ctx.stroke();
       }
-      // bold box borders
-      ctx.strokeStyle = COL.lineBold; ctx.lineWidth = Math.max(2, cell * 0.05);
+      // bold box borders — the defining Sudoku sub-box cages (2x3 here).
+      // Heavier than before so the box structure reads at a glance.
+      ctx.strokeStyle = COL.lineBold;
+      ctx.lineCap = 'square'; ctx.lineJoin = 'miter';
+      ctx.lineWidth = Math.max(2.5, cell * 0.07);
       // vertical bold lines between stacks (every BC cols)
       for(let c = 0; c <= N; c += BC){
         const p = gpad + c * cell;

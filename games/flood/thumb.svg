@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- board panel -->
+  <rect x="92" y="34" width="136" height="136" rx="10" fill="#f3ece0" stroke="#221f17" stroke-width="2"/>
+  <!-- 4x4 grid of flat colour tiles (Flood It board) -->
+  <!-- row 1 -->
+  <rect x="102" y="44"  width="26" height="26" rx="4" fill="#9b3a22"/>
+  <rect x="132" y="44"  width="26" height="26" rx="4" fill="#9b3a22"/>
+  <rect x="162" y="44"  width="26" height="26" rx="4" fill="#c8923a"/>
+  <rect x="192" y="44"  width="26" height="26" rx="4" fill="#6f6a3b"/>
+  <!-- row 2 -->
+  <rect x="102" y="74"  width="26" height="26" rx="4" fill="#9b3a22"/>
+  <rect x="132" y="74"  width="26" height="26" rx="4" fill="#c8923a"/>
+  <rect x="162" y="74"  width="26" height="26" rx="4" fill="#6f6a3b"/>
+  <rect x="192" y="74"  width="26" height="26" rx="4" fill="#c8923a"/>
+  <!-- row 3 -->
+  <rect x="102" y="104" width="26" height="26" rx="4" fill="#c8923a"/>
+  <rect x="132" y="104" width="26" height="26" rx="4" fill="#6f6a3b"/>
+  <rect x="162" y="104" width="26" height="26" rx="4" fill="#9b3a22"/>
+  <rect x="192" y="104" width="26" height="26" rx="4" fill="#6f6a3b"/>
+  <!-- row 4 -->
+  <rect x="102" y="134" width="26" height="26" rx="4" fill="#6f6a3b"/>
+  <rect x="132" y="134" width="26" height="26" rx="4" fill="#9b3a22"/>
+  <rect x="162" y="134" width="26" height="26" rx="4" fill="#c8923a"/>
+  <rect x="192" y="134" width="26" height="26" rx="4" fill="#9b3a22"/>
+  <!-- origin marker in the top-left corner (where the flood spreads from) -->
+  <circle cx="115" cy="57" r="6" fill="#f3ece0"/>
+  <circle cx="115" cy="57" r="2.6" fill="#221f17"/>
+  <!-- colour-pick swatches below the board -->
+  <rect x="116" y="178" width="14" height="14" rx="3" fill="#9b3a22"/>
+  <rect x="136" y="178" width="14" height="14" rx="3" fill="#c8923a"/>
+  <rect x="156" y="178" width="14" height="14" rx="3" fill="#6f6a3b"/>
+  <rect x="176" y="178" width="14" height="14" rx="3" fill="#3f6f9b"/>
+  <rect x="196" y="178" width="14" height="14" rx="3" fill="#7a4e84"/>
+</svg>

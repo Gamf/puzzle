@@ -279,12 +279,19 @@
     function drawTile(val, px, py){
       const m = cell * 0.06;
       const x = px + m, y = py + m, w = cell - m * 2, h = cell - m * 2, r = cell * 0.16;
-      // matte drop shadow — flat warm brown, no blur
+      // matte drop shadow — flat warm brown, no blur (tile sits proud in the tray)
       ctx.fillStyle = '#4a3b2a';
       roundRect(x + 2, y + 3, w, h, r); ctx.fill();
-      // tile face — flat warm ochre printed card
+      // tile face — flat warm ochre printed card (classic numbered tile)
       ctx.fillStyle = '#c8923a';
       roundRect(x, y, w, h, r); ctx.fill();
+      // flat top-edge catch-light — a single lighter inset line, no gradient/glow
+      ctx.strokeStyle = 'rgba(255,255,255,.22)';
+      ctx.lineWidth = Math.max(1, cell * 0.02);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y + cell * 0.05);
+      ctx.lineTo(x + w - r, y + cell * 0.05);
+      ctx.stroke();
       // ink edge
       ctx.strokeStyle = '#4a3b2a';
       ctx.lineWidth = Math.max(1.5, cell * 0.018);
@@ -299,18 +306,24 @@
     function render(){
       // clear every frame so nothing (stale corners / stray particles) lingers
       ctx.clearRect(0, 0, size, size);
-      // board frame — flat warm cream printed board
-      ctx.fillStyle = '#efe6d2'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-      ctx.strokeStyle = '#4a3b2a'; ctx.lineWidth = 1;
+      // tray frame — the classic 15-puzzle's signature: a solid darker rim that
+      // holds the tiles. Flat olive-brown wood, no gradient/bevel/glow.
+      ctx.fillStyle = '#6c6450'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      ctx.strokeStyle = '#221f17'; ctx.lineWidth = 1;
       roundRect(0.5, 0.5, size - 1, size - 1, size * 0.05); ctx.stroke();
+      // recessed inner well of the tray — cream board the tiles sit in
+      ctx.fillStyle = '#efe6d2';
+      roundRect(pad * 0.5, pad * 0.5, size - pad, size - pad, size * 0.035); ctx.fill();
+      ctx.strokeStyle = 'rgba(34,31,23,.28)'; ctx.lineWidth = 1;
+      roundRect(pad * 0.5 + 0.5, pad * 0.5 + 0.5, size - pad - 1, size - pad - 1, size * 0.035); ctx.stroke();
 
-      // empty wells — recessed cream
+      // empty wells — recessed cream slots (the missing-tile gap reads as one of these)
       for(let i = 0; i < N * N; i++){
         const [px, py] = cellXY(i);
         const m = cell * 0.06;
-        ctx.fillStyle = '#e3d6bb';
+        ctx.fillStyle = '#e3d4b2';
         roundRect(px + m, py + m, cell - m * 2, cell - m * 2, cell * 0.16); ctx.fill();
-        ctx.strokeStyle = 'rgba(74,59,42,.22)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(34,31,23,.20)'; ctx.lineWidth = 1;
         roundRect(px + m + 0.5, py + m + 0.5, cell - m * 2 - 1, cell - m * 2 - 1, cell * 0.16); ctx.stroke();
       }
 

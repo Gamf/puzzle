@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#efe6d2"/>
+  <!-- board frame -->
+  <rect x="44" y="28" width="232" height="144" rx="8" fill="#6f6a3b"/>
+  <!-- grid of tiles -->
+  <g>
+    <!-- row 1 -->
+    <rect x="54" y="38" width="40" height="40" fill="#c8923a"/>
+    <rect x="98" y="38" width="40" height="40" fill="#f3ece0"/>
+    <rect x="142" y="38" width="40" height="40" fill="#c8923a"/>
+    <rect x="186" y="38" width="40" height="40" fill="#f3ece0"/>
+    <rect x="230" y="38" width="40" height="40" fill="#c8923a"/>
+    <!-- row 2 -->
+    <rect x="54" y="82" width="40" height="40" fill="#f3ece0"/>
+    <rect x="98" y="82" width="40" height="40" fill="#c8923a"/>
+    <rect x="142" y="82" width="40" height="40" fill="#f3ece0"/>
+    <rect x="186" y="82" width="40" height="40" fill="#c8923a"/>
+    <rect x="230" y="82" width="40" height="40" fill="#f3ece0"/>
+    <!-- row 3 -->
+    <rect x="54" y="126" width="40" height="40" fill="#c8923a"/>
+    <rect x="98" y="126" width="40" height="40" fill="#f3ece0"/>
+    <rect x="142" y="126" width="40" height="40" fill="#c8923a"/>
+    <rect x="186" y="126" width="40" height="40" fill="#f3ece0"/>
+    <rect x="230" y="126" width="40" height="40" fill="#c8923a"/>
+  </g>
+  <!-- number "3" on a revealed tile -->
+  <path d="M111 92 h14 l-7 8 h6 v8 h-6 l7 8 h-14" fill="none" stroke="#9b3a22" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+  <!-- number "1" -->
+  <path d="M204 92 l5 -4 v24" fill="none" stroke="#6f6a3b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- red flag on a covered tile (top-left) -->
+  <line x1="74" y1="48" x2="74" y2="68" stroke="#221f17" stroke-width="4"/>
+  <rect x="66" y="68" width="16" height="5" fill="#221f17"/>
+  <path d="M74 50 l-14 6 l14 6 z" fill="#9b3a22"/>
+  <!-- spiky mine on a revealed tile (center) -->
+  <g stroke="#221f17" stroke-width="4">
+    <line x1="162" y1="146" x2="162" y2="124"/>
+    <line x1="162" y1="146" x2="162" y2="168"/>
+    <line x1="151" y1="146" x2="173" y2="146"/>
+    <line x1="154" y1="138" x2="170" y2="154"/>
+    <line x1="170" y1="138" x2="154" y2="154"/>
+  </g>
+  <circle cx="162" cy="146" r="11" fill="#221f17"/>
+  <circle cx="158" cy="142" r="3" fill="#f3ece0"/>
+</svg>
