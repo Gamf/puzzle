@@ -559,26 +559,27 @@
     helpCloseEl.addEventListener('click', hideHelp);
     helpEl.addEventListener('click', e => { if(e.target === helpEl) hideHelp(); });
 
-    // ---- on-screen buttons (everything is a button) ----
-    // D-pad moves the keyboard cursor (same as arrows); actions cover every
-    // non-direction control. The four colour pads map straight to pressPad
-    // (same as 1–4 keys) so the game is fully playable by buttons alone.
+    // ---- on-screen buttons ----
+    // Simon's four pads sit in the four corners of the disc, so the D-pad maps
+    // straight onto them spatially: each direction PRESSES one colour pad
+    // instantly (no cursor to chase). It's a step game, so hold:false.
+    //   Up = Top-Left (oxblood)   ◀ none of the indirection of the old cursor
+    //   Left = Bottom-Left (olive)
+    //   Right = Top-Right (ochre)
+    //   Down = Bottom-Right (clay)
+    // (each arrow points toward the half its pad lives in; this matches how the
+    // four pads read on screen.) A single big primary button starts / replays.
+    function tapPad(i){ ensureAudio(); cursor = i; if(phase === 'input') pressPad(i); requestFrame(); }
     window.gamfControls({
       move: {
-        left:  () => moveCursor('left'),
-        right: () => moveCursor('right'),
-        up:    () => moveCursor('up'),
-        down:  () => moveCursor('down'),
+        up:    () => tapPad(0), // top-left pad
+        right: () => tapPad(1), // top-right pad
+        left:  () => tapPad(2), // bottom-left pad
+        down:  () => tapPad(3), // bottom-right pad
       },
-      hold: false, // Simon is a step game — no auto-repeat
+      hold: false, // Simon is a step game — never auto-repeat
       actions: [
-        { label: 'Go',    press: pressAction },                                   // Space/Enter: start or press selected pad
-        { label: '1',     press: () => { ensureAudio(); if(phase === 'input') pressPad(0); } },
-        { label: '2',     press: () => { ensureAudio(); if(phase === 'input') pressPad(1); } },
-        { label: '3',     press: () => { ensureAudio(); if(phase === 'input') pressPad(2); } },
-        { label: '4',     press: () => { ensureAudio(); if(phase === 'input') pressPad(3); } },
-        { label: 'Pause', press: togglePause },                                   // P
-        { label: 'New',   press: reset },                                         // R
+        { label: 'Start', press: pressAction }, // start, or replay after game over (Space/Enter)
       ],
     });
 

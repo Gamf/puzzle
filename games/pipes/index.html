@@ -600,9 +600,14 @@
     }
 
     // ============================================================ on-screen buttons (gamf-controls)
-    // Mirror the keyboard handler exactly: D-pad moves the cursor; Rotate maps to
-    // Space/Enter (rotate the cursor tile, or advance to the next level once won);
-    // New = R (reset/rescramble level); Pause = P.
+    // A novice plays this by tapping a pipe directly (onTap, above) — that is the
+    // primary, no-thinking gesture. The thumb-zone controls mirror the keyboard for
+    // two-handed play: the bottom-LEFT D-pad nudges the cursor a square at a time
+    // (step game, so hold:false — one move per press), and a single big bottom-RIGHT
+    // PRIMARY button rotates the cursor tile (or advances once the level is won).
+    // Pause/Restart are deliberately kept OUT of the thumb cluster — they live on the
+    // keyboard, the hint chips, and the win screen — so a novice reaching for Rotate
+    // can never accidentally wipe progress or freeze the board.
     function pressRotate(){
       if(won) nextLevel();
       else if(!paused) rotateTile(cursor, true);
@@ -617,8 +622,6 @@
       hold: false,                       // step game: one cursor move per press
       actions: [
         { label: 'Rotate', press: pressRotate },
-        { label: 'New',    press: reset },
-        { label: 'Pause',  press: togglePause },
       ],
     });
 

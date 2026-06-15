@@ -481,7 +481,12 @@
     document.getElementById('gxHelpClose').onclick = closeHelp;
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
 
-    // ---- on-screen buttons (everything playable by buttons; same fns as keyboard) ----
+    // ---- on-screen buttons: D-pad to move (bottom-left), one big Undo (bottom-right) ----
+    // 2048 is a STEP game: each tap = exactly one move, so hold:false (a novice taps a
+    // direction, watches it settle, taps again). The only gameplay action a novice
+    // reaches for mid-game is Undo, so it's the lone big primary. Pause/New stay OUT of
+    // the thumb cluster (keyboard P/R + the top chips + the game-over screen cover them)
+    // so nobody accidentally restarts the board while reaching for a move.
     window.gamfControls({
       move: {
         left:  () => { if(!paused) move('left'); },
@@ -491,9 +496,7 @@
       },
       hold: false,                 // 2048 is a discrete step game — one move per press
       actions: [
-        { label: 'Undo',  press: undo },
-        { label: 'Pause', press: togglePause },
-        { label: 'New',   press: reset },
+        { label: 'Undo', press: undo },
       ],
     });
 

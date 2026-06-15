@@ -248,12 +248,10 @@
     const flagAt   =()=>{ toggleFlag(cursor.x,cursor.y); requestAnimationFrame(loop); };
     window.gamfControls({
       move:{ left:moveLeft, right:moveRight, up:moveUp, down:moveDown },
-      hold:false,
+      hold:false, // step game: move the cursor one cell per tap
       actions:[
-        { label:'New', press:reset },
-        { label:'Pause', press:togglePause },
-        { label:'Flag', press:flagAt },
-        { label:'Reveal', press:revealAt },
+        { label:'Reveal', press:revealAt }, // big primary: the most-used action
+        { label:'Flag', press:flagAt },     // secondary: mark a mine
       ],
     });
 

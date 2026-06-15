@@ -504,26 +504,29 @@
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
 
     // ---- on-screen buttons (shared editorial-styled control layer) ----
-    // D-pad left/right (and up/down) move the palette cursor, mirroring the
-    // keyboard arrows. Action buttons cover every non-direction control:
-    //   Flood = Space/Enter (flood with selected, or new board if game over)
-    //   New   = R, Pause = P.
+    // Flood It is a STEP puzzle: each turn you arm one of six colors, then flood.
+    // The bottom-LEFT D-pad is a simple ◀/▶ color selector — the armed color is
+    // shown by the ring on the palette above; no up/down (it's a 1-D list, and a
+    // novice never needs a second axis). hold:false so stepping never auto-fires.
+    // The bottom-RIGHT cluster is gameplay only: the BIG primary is Flood (the
+    // one button you press every single turn — commit the armed color, or start a
+    // New board once the game is over). A single small New secondary lets a stuck
+    // player restart without a keyboard. Pause is intentionally NOT here — it sits
+    // right where the thumb reaches for Flood and would be a costly mis-tap; it
+    // stays on the keyboard (P) and the controls hint chip.
     function floodSelected(){
       if(done) reset();
       else if(!paused) pick(cursor);
     }
     window.gamfControls({
       move: {
-        left:  () => moveCursor(-1),
-        right: () => moveCursor(1),
-        up:    () => moveCursor(-1),
-        down:  () => moveCursor(1),
+        left:  () => moveCursor(-1),     // previous color
+        right: () => moveCursor(1),      // next color
       },
-      hold: false,                       // step game: tap to move cursor one swatch
+      hold: false,                       // step game: each tap arms the next swatch
       actions: [
-        { label: 'Flood', press: floodSelected },
-        { label: 'New',   press: reset },
-        { label: 'Pause', press: togglePause },
+        { label: 'Flood', press: floodSelected },  // big primary — used every turn
+        { label: 'New',   press: reset },          // single small secondary — restart
       ],
     });
 

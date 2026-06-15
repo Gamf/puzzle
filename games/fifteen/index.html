@@ -396,9 +396,14 @@
       else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
     });
 
-    // ---- on-screen buttons (mirror the keyboard exactly) ----
-    // Same Space/Enter behaviour: start a new puzzle when won, else slide the cursor tile.
-    function slideAction(){ if(won) startGame(); else if(!paused) slide(cursor); }
+    // ---- on-screen buttons ----
+    // The whole game IS the D-pad: each press slides the one tile that lies in
+    // that direction into the gap. Discrete, one slide per press (hold:false) so
+    // a novice taps a direction and watches a single tile move — exactly like the
+    // arrow keys. A sliding puzzle has NO gameplay action button, so the right
+    // thumb zone is left empty: there's nothing there to fat-finger into wrecking
+    // a puzzle in progress. New (destructive) and Pause stay on the keyboard, the
+    // hint chips, and the win screen — well out of the thumb's reach-path.
     window.gamfControls({
       move: {
         left:  () => slideDir('left'),
@@ -407,11 +412,6 @@
         down:  () => slideDir('down'),
       },
       hold: false,   // step-based: one discrete slide per press
-      actions: [
-        { label: 'Slide', press: slideAction },   // Space / Enter
-        { label: 'New',   press: reset },         // R
-        { label: 'Pause', press: togglePause },   // P
-      ],
     });
 
     // ---- how to play overlay ----

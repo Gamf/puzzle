@@ -583,28 +583,25 @@
       for(let s = 1; s <= N * N; s++){ const i = (cursor + s) % (N * N); if(!board[i]){ cursor = i; requestFrame(); return; } }
     }
 
-    // ---- on-screen buttons (shared helper) — everything is a button ----
-    // D-pad moves the cursor; action buttons place 1-6, erase, advance, new, pause —
-    // each wired to the same function the keyboard uses.
+    // ---- on-screen buttons (shared helper) ----
+    // Novice flow: D-pad (bottom-left) walks the cursor one cell at a time;
+    // numbers are entered by tapping the big on-canvas number pad under the board
+    // (already wired via onTap), right where the eye is. The bottom-right thumb
+    // cluster stays MINIMAL — just the two non-digit gameplay actions: Erase (the
+    // big primary, the thing you reach for to fix a wrong number) and Next (skip to
+    // the next empty cell). Pause / New live on the keyboard, the modal, and the top
+    // hint chips, so they're kept OUT of the thumb zone to avoid mis-taps.
     window.gamfControls({
-      move: {
+      move: {                                      // step move — one cell per press
         left:  () => moveCursor(-1, 0),
         right: () => moveCursor(1, 0),
         up:    () => moveCursor(0, -1),
         down:  () => moveCursor(0, 1),
       },
-      hold: false,                                 // step game — one move per press
+      hold: false,                                 // step game — no auto-repeat
       actions: [
-        { label: '1', press: () => { if(!paused) setValue(1); } },
-        { label: '2', press: () => { if(!paused) setValue(2); } },
-        { label: '3', press: () => { if(!paused) setValue(3); } },
-        { label: '4', press: () => { if(!paused) setValue(4); } },
-        { label: '5', press: () => { if(!paused) setValue(5); } },
-        { label: '6', press: () => { if(!paused) setValue(6); } },
-        { label: 'Erase', press: () => { if(!paused) setValue(0); } },
-        { label: 'Next',  press: () => gotoNextEmpty() },
-        { label: 'Pause', press: () => togglePause() },
-        { label: 'New',   press: () => startPuzzle(true) },
+        { label: 'Erase', press: () => { if(!paused && !won) setValue(0); } },  // big primary
+        { label: 'Next',  press: () => gotoNextEmpty() },                       // small secondary
       ],
     });
 

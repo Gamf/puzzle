@@ -471,7 +471,11 @@
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
 
     // ---- on-screen buttons (shared helper) — wire to the SAME functions the keyboard uses ----
-    // D-pad: step the cursor (no auto-repeat). Action buttons cover every non-direction control.
+    // STEP game: the cursor hops one cell per press, so the D-pad does NOT auto-repeat
+    // (hold:false) — a held button would race the cursor across the board. The big
+    // primary is Flip (the only thing you do every turn); Hint is the one helpful
+    // secondary a novice actually reaches for. Pause/New stay OFF the thumb cluster
+    // (keyboard P/R + the on-page chips) so a thumb reaching for Flip can't trip them.
     function flipOrNext(){ if(won) nextLevel(); else if(!paused) press(cursor); }
     window.gamfControls({
       move: {
@@ -482,10 +486,8 @@
       },
       hold: false,
       actions: [
-        { label: 'Flip',  press: flipOrNext },   // Space/Enter — flip selected cell (or Next on win)
-        { label: 'Hint',  press: showHint },     // H
-        { label: 'New',   press: reset },        // R — restart level
-        { label: 'Pause', press: togglePause },  // P
+        { label: 'Flip', press: flipOrNext },   // Space/Enter — flip selected cell (or Next on win)
+        { label: 'Hint', press: showHint },     // H — suggest a useful press
       ],
     });
 

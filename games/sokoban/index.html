@@ -22,25 +22,6 @@
     canvas { border-radius: var(--r-5); touch-action: none; display: block;
       box-shadow: 0 10px 26px rgba(74,59,42,.22), inset 0 0 0 1px rgba(34,31,23,.08); }
 
-    /* on-screen d-pad */
-    .pad { position: fixed; left: 50%; transform: translateX(-50%);
-      bottom: calc(env(safe-area-inset-bottom) + 58px); z-index: 5;
-      display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(3, 58px);
-      gap: 6px; pointer-events: none; }
-    .pad button { pointer-events: auto; -webkit-appearance: none; appearance: none;
-      display: grid; place-items: center; cursor: pointer; color: var(--gx-text);
-      background: color-mix(in srgb, var(--gx-screen) 78%, transparent);
-      border: 1px solid var(--gx-line-2); border-radius: var(--r-4);
-      box-shadow: var(--sh-1); transition: transform .08s ease, background .12s ease, border-color .12s ease;
-      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-    .pad button .gx-ico { width: 26px; height: 26px; }
-    .pad button:active { transform: translateY(2px); box-shadow: 0 0 0 var(--gx-ink);
-      background: color-mix(in srgb, var(--gx-accent) 30%, var(--gx-screen)); border-color: var(--gx-accent); }
-    .pad .pu { grid-area: 1 / 2; } .pad .pl { grid-area: 2 / 1; }
-    .pad .pd { grid-area: 3 / 2; } .pad .pr { grid-area: 2 / 3; }
-    .pad .pc { grid-area: 2 / 2; color: var(--gx-amber); }
-    .pad .pc .gx-ico { width: 22px; height: 22px; }
-
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-accent) 20%, var(--gx-panel-2)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -63,14 +44,7 @@
 
   <div class="stage"><canvas id="c"></canvas></div>
 
-  <!-- On-screen d-pad -->
-  <div class="pad" id="pad">
-    <button class="pu" data-dir="up"    aria-label="Up"><svg class="gx-ico"><use href="#i-up"/></svg></button>
-    <button class="pl" data-dir="left"  aria-label="Left"><svg class="gx-ico"><use href="#i-left"/></svg></button>
-    <button class="pc" data-dir="undo"  aria-label="Undo"><svg class="gx-ico"><use href="#i-restart"/></svg></button>
-    <button class="pr" data-dir="right" aria-label="Right"><svg class="gx-ico"><use href="#i-right"/></svg></button>
-    <button class="pd" data-dir="down"  aria-label="Down"><svg class="gx-ico"><use href="#i-down"/></svg></button>
-  </div>
+  <!-- Touch controls (D-pad + actions) are rendered by gamf-controls.js -->
 
   <!-- Controls hint -->
   <div class="gx-hint">
@@ -568,13 +542,6 @@
       else move(ddy > 0 ? 'down' : 'up');
     });
 
-    // ---- d-pad ----
-    document.getElementById('pad').addEventListener('click', e => {
-      const btn = e.target.closest('button'); if(!btn) return;
-      const dir = btn.dataset.dir;
-      if(dir === 'undo') undo(); else move(dir);
-    });
-
     document.getElementById('undoBtn').onclick = undo;
     document.getElementById('newBtn').onclick = reset;
     document.getElementById('pauseBtn').onclick = togglePause;
@@ -615,9 +582,13 @@
     document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
 
-    // ---- on-screen buttons (shared helper) — fully drive the game ----
-    // Step-based puzzle, so no auto-repeat (hold:false). D-pad pushes crates;
-    // action buttons cover every non-direction control from the keyboard handler.
+    // ---- on-screen buttons (shared helper) ----
+    // Step-based puzzle: each tap = one move, so hold:false (no auto-repeat) — a
+    // novice taps the D-pad once per crate-push. Bottom-LEFT D-pad pushes crates;
+    // bottom-RIGHT cluster is gameplay only: UNDO is the big primary (you undo a
+    // bad push constantly in Sokoban), Reset is one small secondary for a stuck
+    // board. Pause stays on the keyboard (P); "Next level" lives on the win modal
+    // — neither belongs under the thumb where it'd be hit by accident.
     window.gamfControls({
       move: {
         left:  () => move('left'),
@@ -629,8 +600,6 @@
       actions: [
         { label: 'Undo',  press: undo },
         { label: 'Reset', press: reset },
-        { label: 'Pause', press: togglePause },
-        { label: 'Next',  press: () => { if(won) nextLevel(); } },
       ],
     });
 
