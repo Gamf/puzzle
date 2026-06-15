@@ -73,6 +73,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -510,18 +511,21 @@
       return cursor;
     }
 
+    // shared move/action helpers — used by BOTH keyboard and on-screen buttons
+    function moveCursor(dir){ cursor = dirToPad(dir); requestFrame(); }
+    function pressAction(){
+      ensureAudio();
+      if(phase === 'idle' || phase === 'over'){ start(); }
+      else if(phase === 'input'){ pressPad(cursor); }
+    }
+
     addEventListener('keydown', e => {
       const k = e.key;
-      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); cursor = dirToPad('left'); requestFrame(); }
-      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); cursor = dirToPad('right'); requestFrame(); }
-      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); cursor = dirToPad('up'); requestFrame(); }
-      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); cursor = dirToPad('down'); requestFrame(); }
-      else if(k === ' ' || k === 'Enter'){
-        e.preventDefault();
-        ensureAudio();
-        if(phase === 'idle' || phase === 'over'){ start(); }
-        else if(phase === 'input'){ pressPad(cursor); }
-      }
+      if(k === 'ArrowLeft' || k === 'a' || k === 'A'){ e.preventDefault(); moveCursor('left'); }
+      else if(k === 'ArrowRight' || k === 'd' || k === 'D'){ e.preventDefault(); moveCursor('right'); }
+      else if(k === 'ArrowUp' || k === 'w' || k === 'W'){ e.preventDefault(); moveCursor('up'); }
+      else if(k === 'ArrowDown' || k === 's' || k === 'S'){ e.preventDefault(); moveCursor('down'); }
+      else if(k === ' ' || k === 'Enter'){ e.preventDefault(); pressAction(); }
       else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
       else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
     });
@@ -554,6 +558,29 @@
     helpOpenEl.addEventListener('click', showHelp);
     helpCloseEl.addEventListener('click', hideHelp);
     helpEl.addEventListener('click', e => { if(e.target === helpEl) hideHelp(); });
+
+    // ---- on-screen buttons (everything is a button) ----
+    // D-pad moves the keyboard cursor (same as arrows); actions cover every
+    // non-direction control. The four colour pads map straight to pressPad
+    // (same as 1–4 keys) so the game is fully playable by buttons alone.
+    window.gamfControls({
+      move: {
+        left:  () => moveCursor('left'),
+        right: () => moveCursor('right'),
+        up:    () => moveCursor('up'),
+        down:  () => moveCursor('down'),
+      },
+      hold: false, // Simon is a step game — no auto-repeat
+      actions: [
+        { label: 'Go',    press: pressAction },                                   // Space/Enter: start or press selected pad
+        { label: '1',     press: () => { ensureAudio(); if(phase === 'input') pressPad(0); } },
+        { label: '2',     press: () => { ensureAudio(); if(phase === 'input') pressPad(1); } },
+        { label: '3',     press: () => { ensureAudio(); if(phase === 'input') pressPad(2); } },
+        { label: '4',     press: () => { ensureAudio(); if(phase === 'input') pressPad(3); } },
+        { label: 'Pause', press: togglePause },                                   // P
+        { label: 'New',   press: reset },                                         // R
+      ],
+    });
 
     // ---- boot ----
     fit();

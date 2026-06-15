@@ -78,6 +78,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -468,6 +469,25 @@
     document.getElementById('gxHelpOpen').onclick = openHelp;
     document.getElementById('gxHelpClose').onclick = closeHelp;
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
+    // ---- on-screen buttons (shared helper) — wire to the SAME functions the keyboard uses ----
+    // D-pad: step the cursor (no auto-repeat). Action buttons cover every non-direction control.
+    function flipOrNext(){ if(won) nextLevel(); else if(!paused) press(cursor); }
+    window.gamfControls({
+      move: {
+        left:  () => moveCursor(-1, 0),
+        right: () => moveCursor(1, 0),
+        up:    () => moveCursor(0, -1),
+        down:  () => moveCursor(0, 1),
+      },
+      hold: false,
+      actions: [
+        { label: 'Flip',  press: flipOrNext },   // Space/Enter — flip selected cell (or Next on win)
+        { label: 'Hint',  press: showHint },     // H
+        { label: 'New',   press: reset },        // R — restart level
+        { label: 'Pause', press: togglePause },  // P
+      ],
+    });
 
     // ---- boot ----
     fullReset();

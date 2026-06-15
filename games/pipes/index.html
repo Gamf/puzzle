@@ -84,6 +84,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -597,6 +598,29 @@
       cursor = idx(x, y);
       requestFrame();
     }
+
+    // ============================================================ on-screen buttons (gamf-controls)
+    // Mirror the keyboard handler exactly: D-pad moves the cursor; Rotate maps to
+    // Space/Enter (rotate the cursor tile, or advance to the next level once won);
+    // New = R (reset/rescramble level); Pause = P.
+    function pressRotate(){
+      if(won) nextLevel();
+      else if(!paused) rotateTile(cursor, true);
+    }
+    window.gamfControls({
+      move: {
+        left:  () => moveCursor(-1, 0),
+        right: () => moveCursor(1, 0),
+        up:    () => moveCursor(0, -1),
+        down:  () => moveCursor(0, 1),
+      },
+      hold: false,                       // step game: one cursor move per press
+      actions: [
+        { label: 'Rotate', press: pressRotate },
+        { label: 'New',    press: reset },
+        { label: 'Pause',  press: togglePause },
+      ],
+    });
 
     // ============================================================ how-to-play overlay
     const SEEN_KEY = 'gamf-seen-puzzle-pipes';

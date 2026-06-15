@@ -72,6 +72,7 @@
     <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
   </div></div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
     const COLS=9, ROWS=9, MINES=10;
@@ -237,6 +238,24 @@
       else if(k==='r'||k==='R'){e.preventDefault();reset();return;}
       else return;
       requestAnimationFrame(loop); });
+
+    // On-screen buttons (shared helper). Mirror the keyboard handler exactly.
+    const moveLeft =()=>{ cursor.x=Math.max(0,cursor.x-1); requestAnimationFrame(loop); };
+    const moveRight=()=>{ cursor.x=Math.min(COLS-1,cursor.x+1); requestAnimationFrame(loop); };
+    const moveUp   =()=>{ cursor.y=Math.max(0,cursor.y-1); requestAnimationFrame(loop); };
+    const moveDown =()=>{ cursor.y=Math.min(ROWS-1,cursor.y+1); requestAnimationFrame(loop); };
+    const revealAt =()=>{ if(revealed[cursor.y][cursor.x]) chord(cursor.x,cursor.y); else reveal(cursor.x,cursor.y); requestAnimationFrame(loop); };
+    const flagAt   =()=>{ toggleFlag(cursor.x,cursor.y); requestAnimationFrame(loop); };
+    window.gamfControls({
+      move:{ left:moveLeft, right:moveRight, up:moveUp, down:moveDown },
+      hold:false,
+      actions:[
+        { label:'New', press:reset },
+        { label:'Pause', press:togglePause },
+        { label:'Flag', press:flagAt },
+        { label:'Reveal', press:revealAt },
+      ],
+    });
 
     // How-to-play overlay
     const SEEN_KEY='gamf-seen-puzzle-minesweeper';

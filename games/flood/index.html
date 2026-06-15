@@ -100,6 +100,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -501,6 +502,30 @@
     helpOpenEl.addEventListener('click', openHelp);
     helpCloseEl.addEventListener('click', closeHelp);
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
+    // ---- on-screen buttons (shared editorial-styled control layer) ----
+    // D-pad left/right (and up/down) move the palette cursor, mirroring the
+    // keyboard arrows. Action buttons cover every non-direction control:
+    //   Flood = Space/Enter (flood with selected, or new board if game over)
+    //   New   = R, Pause = P.
+    function floodSelected(){
+      if(done) reset();
+      else if(!paused) pick(cursor);
+    }
+    window.gamfControls({
+      move: {
+        left:  () => moveCursor(-1),
+        right: () => moveCursor(1),
+        up:    () => moveCursor(-1),
+        down:  () => moveCursor(1),
+      },
+      hold: false,                       // step game: tap to move cursor one swatch
+      actions: [
+        { label: 'Flood', press: floodSelected },
+        { label: 'New',   press: reset },
+        { label: 'Pause', press: togglePause },
+      ],
+    });
 
     // ---- boot ----
     buildSwatches();

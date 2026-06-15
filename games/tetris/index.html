@@ -67,6 +67,7 @@
     </ul>
     <button class="gx-btn gx-btn--primary" id="gxHelpClose">Got it</button>
   </div></div>
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onSwipe, onTap } from './touch.js';
     const COLS=10, ROWS=20;
@@ -182,6 +183,17 @@
       else if(k===' '||k==='Enter'){e.preventDefault();hard();}
       else if(k==='p'||k==='P'){e.preventDefault();togglePause();}
       else if(k==='r'||k==='R'){e.preventDefault();reset();} });
+
+    window.gamfControls({
+      move:{ left:()=>move(-1), right:()=>move(1), down:soft },
+      hold:true,
+      actions:[
+        { label:'Rotate', press:rot },
+        { label:'Drop',   press:hard },
+        { label:'Pause',  press:togglePause },
+        { label:'Restart',press:reset },
+      ],
+    });
 
     const SEEN_KEY='gamf-seen-puzzle-tetris';
     const helpEl=document.getElementById('gxHelp');

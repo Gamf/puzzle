@@ -77,6 +77,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap, onSwipe } from './touch.js';
 
@@ -393,6 +394,24 @@
       }
       else if(k === 'r' || k === 'R'){ e.preventDefault(); reset(); }
       else if(k === 'p' || k === 'P'){ e.preventDefault(); togglePause(); }
+    });
+
+    // ---- on-screen buttons (mirror the keyboard exactly) ----
+    // Same Space/Enter behaviour: start a new puzzle when won, else slide the cursor tile.
+    function slideAction(){ if(won) startGame(); else if(!paused) slide(cursor); }
+    window.gamfControls({
+      move: {
+        left:  () => slideDir('left'),
+        right: () => slideDir('right'),
+        up:    () => slideDir('up'),
+        down:  () => slideDir('down'),
+      },
+      hold: false,   // step-based: one discrete slide per press
+      actions: [
+        { label: 'Slide', press: slideAction },   // Space / Enter
+        { label: 'New',   press: reset },         // R
+        { label: 'Pause', press: togglePause },   // P
+      ],
     });
 
     // ---- how to play overlay ----

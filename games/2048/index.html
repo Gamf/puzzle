@@ -75,6 +75,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onSwipe } from './touch.js';
 
@@ -479,6 +480,22 @@
     document.getElementById('gxHelpOpen').onclick = openHelp;
     document.getElementById('gxHelpClose').onclick = closeHelp;
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
+    // ---- on-screen buttons (everything playable by buttons; same fns as keyboard) ----
+    window.gamfControls({
+      move: {
+        left:  () => { if(!paused) move('left'); },
+        right: () => { if(!paused) move('right'); },
+        up:    () => { if(!paused) move('up'); },
+        down:  () => { if(!paused) move('down'); },
+      },
+      hold: false,                 // 2048 is a discrete step game — one move per press
+      actions: [
+        { label: 'Undo',  press: undo },
+        { label: 'Pause', press: togglePause },
+        { label: 'New',   press: reset },
+      ],
+    });
 
     reset();
 

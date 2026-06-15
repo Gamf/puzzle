@@ -110,6 +110,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -613,6 +614,25 @@
     document.getElementById('gxHelpOpen').addEventListener('click', openHelp);
     document.getElementById('gxHelpClose').addEventListener('click', closeHelp);
     helpEl.addEventListener('click', e => { if(e.target === helpEl) closeHelp(); });
+
+    // ---- on-screen buttons (shared helper) — fully drive the game ----
+    // Step-based puzzle, so no auto-repeat (hold:false). D-pad pushes crates;
+    // action buttons cover every non-direction control from the keyboard handler.
+    window.gamfControls({
+      move: {
+        left:  () => move('left'),
+        right: () => move('right'),
+        up:    () => move('up'),
+        down:  () => move('down'),
+      },
+      hold: false,
+      actions: [
+        { label: 'Undo',  press: undo },
+        { label: 'Reset', press: reset },
+        { label: 'Pause', press: togglePause },
+        { label: 'Next',  press: () => { if(won) nextLevel(); } },
+      ],
+    });
 
     // ---- boot ----
     fullReset();

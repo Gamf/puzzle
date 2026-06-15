@@ -81,6 +81,7 @@
     </div>
   </div>
 
+  <script src="../../gamf-controls.js"></script>
   <script type="module">
     import { onTap } from './touch.js';
 
@@ -581,6 +582,31 @@
       if(paused || won) return;
       for(let s = 1; s <= N * N; s++){ const i = (cursor + s) % (N * N); if(!board[i]){ cursor = i; requestFrame(); return; } }
     }
+
+    // ---- on-screen buttons (shared helper) — everything is a button ----
+    // D-pad moves the cursor; action buttons place 1-6, erase, advance, new, pause —
+    // each wired to the same function the keyboard uses.
+    window.gamfControls({
+      move: {
+        left:  () => moveCursor(-1, 0),
+        right: () => moveCursor(1, 0),
+        up:    () => moveCursor(0, -1),
+        down:  () => moveCursor(0, 1),
+      },
+      hold: false,                                 // step game — one move per press
+      actions: [
+        { label: '1', press: () => { if(!paused) setValue(1); } },
+        { label: '2', press: () => { if(!paused) setValue(2); } },
+        { label: '3', press: () => { if(!paused) setValue(3); } },
+        { label: '4', press: () => { if(!paused) setValue(4); } },
+        { label: '5', press: () => { if(!paused) setValue(5); } },
+        { label: '6', press: () => { if(!paused) setValue(6); } },
+        { label: 'Erase', press: () => { if(!paused) setValue(0); } },
+        { label: 'Next',  press: () => gotoNextEmpty() },
+        { label: 'Pause', press: () => togglePause() },
+        { label: 'New',   press: () => startPuzzle(true) },
+      ],
+    });
 
     // ---- how-to-play overlay ----
     const helpEl = document.getElementById('gxHelp');
