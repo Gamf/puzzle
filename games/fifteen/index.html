@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>15 Puzzle — Gamf</title>
   <meta name="description" content="The classic 4x4 sliding-tile puzzle. Slide tiles into the gap to order 1–15. Always solvable, touch-first, fewest moves wins.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,12 +15,12 @@
   </script>
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #6c8cff; }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
     canvas { border-radius: var(--r-5); touch-action: none; display: block;
-      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.04); }
+      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(34,31,23,.08); }
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-amber) 18%, var(--gx-screen)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -218,7 +218,7 @@
     function burst(i){
       const [px, py] = cellXY(i);
       const cx = px + cell / 2, cy = py + cell / 2;
-      const cols = ['#e8a23a', '#d8412b', '#6c8cff', '#f4ede1'];
+      const cols = ['#c8923a', '#9b3a22', '#6f6a3b', '#a4623a'];
       const col = cols[i % cols.length];
       const count = 8;
       for(let k = 0; k < count; k++){
@@ -278,24 +278,18 @@
     function drawTile(val, px, py){
       const m = cell * 0.06;
       const x = px + m, y = py + m, w = cell - m * 2, h = cell - m * 2, r = cell * 0.16;
-      // body gradient — warm amber/blue arcade face
-      const grad = ctx.createLinearGradient(x, y, x, y + h);
-      grad.addColorStop(0, '#2a2018');
-      grad.addColorStop(1, '#1b1410');
-      // socket / drop shadow
-      ctx.fillStyle = '#0a0806';
+      // matte drop shadow — flat warm brown, no blur
+      ctx.fillStyle = '#4a3b2a';
       roundRect(x + 2, y + 3, w, h, r); ctx.fill();
-      ctx.fillStyle = grad;
+      // tile face — flat warm ochre printed card
+      ctx.fillStyle = '#c8923a';
       roundRect(x, y, w, h, r); ctx.fill();
-      // amber edge
-      ctx.strokeStyle = '#e8a23a';
+      // ink edge
+      ctx.strokeStyle = '#4a3b2a';
       ctx.lineWidth = Math.max(1.5, cell * 0.018);
       roundRect(x + 1, y + 1, w - 2, h - 2, r - 1); ctx.stroke();
-      // top gloss
-      ctx.fillStyle = 'rgba(244,237,225,0.08)';
-      roundRect(x + w * 0.10, y + h * 0.08, w * 0.80, h * 0.24, r * 0.6); ctx.fill();
-      // number
-      ctx.fillStyle = '#f4ede1';
+      // number — printed ink
+      ctx.fillStyle = '#221f17';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = '400 ' + Math.floor(cell * 0.42) + "px 'Anton', sans-serif";
       ctx.fillText(String(val + 1), x + w / 2, y + h / 2 + cell * 0.02);
@@ -304,19 +298,19 @@
     function render(){
       // clear every frame so nothing (stale corners / stray particles) lingers
       ctx.clearRect(0, 0, size, size);
-      // board frame
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#15110e');
-      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1;
+      // board frame — flat warm cream printed board
+      ctx.fillStyle = '#efe6d2'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      ctx.strokeStyle = '#4a3b2a'; ctx.lineWidth = 1;
       roundRect(0.5, 0.5, size - 1, size - 1, size * 0.05); ctx.stroke();
 
-      // empty wells
+      // empty wells — recessed cream
       for(let i = 0; i < N * N; i++){
         const [px, py] = cellXY(i);
         const m = cell * 0.06;
-        ctx.fillStyle = '#100c09';
+        ctx.fillStyle = '#e3d6bb';
         roundRect(px + m, py + m, cell - m * 2, cell - m * 2, cell * 0.16); ctx.fill();
+        ctx.strokeStyle = 'rgba(74,59,42,.22)'; ctx.lineWidth = 1;
+        roundRect(px + m + 0.5, py + m + 0.5, cell - m * 2 - 1, cell - m * 2 - 1, cell * 0.16); ctx.stroke();
       }
 
       // tiles (skip blank and the animating tile's static draw)
@@ -326,10 +320,10 @@
         if(anim && i === anim.toIdx) continue;   // drawn separately, in motion
         const [px, py] = cellXY(i);
         drawTile(val, px, py);
-        // keyboard cursor highlight
+        // keyboard cursor highlight — oxblood accent
         if(i === cursor && !won && !paused){
           const m = cell * 0.06;
-          ctx.strokeStyle = '#6c8cff';
+          ctx.strokeStyle = '#9b3a22';
           ctx.lineWidth = Math.max(2, cell * 0.04);
           roundRect(px + m, py + m, cell - m * 2, cell - m * 2, cell * 0.16); ctx.stroke();
         }
@@ -352,10 +346,10 @@
       }
       ctx.globalAlpha = 1;
 
-      // pause veil
+      // pause veil — warm cream wash, ink text
       if(paused){
-        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(239,230,210,.86)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+        ctx.fillStyle = '#221f17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '400 ' + Math.floor(size * 0.11) + "px 'Anton', sans-serif";
         ctx.fillText('PAUSED', size / 2, size / 2);
       }

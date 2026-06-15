@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Mini Sudoku — Gamf</title>
-  <meta name="description" content="A bite-size 6x6 Sudoku. Tap a cell, pick a number, and fill the grid so every row, column and 2x3 box holds 1 to 6 — conflicts light up red.">
+  <meta name="description" content="A bite-size 6x6 Sudoku. Tap a cell, pick a number, and fill the grid so every row, column and 2x3 box holds 1 to 6 — conflicts mark in oxblood.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -15,12 +15,12 @@
   </script>
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #d8412b; }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: calc(env(safe-area-inset-top) + 56px) 12px calc(env(safe-area-inset-bottom) + 56px); }
     canvas { border-radius: var(--r-5); touch-action: none; display: block;
-      box-shadow: 8px 8px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.03); }
+      box-shadow: 8px 8px 0 #221f17, inset 0 0 0 1px rgba(34,31,23,.08); }
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-panel-2)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -101,11 +101,14 @@
     const newBestEl     = document.getElementById('newBest');
     const againLabelEl  = document.getElementById('againLabel');
 
-    // palette
+    // palette — warm 1970s print catalogue: flat matte ink on cream paper
     const COL = {
-      boardTop:'#1b1410', boardBot:'#100c09', line:'#36281d', lineBold:'#5a4632',
-      bg:'#15110e', red:'#d8412b', amber:'#e8a23a', bone:'#f4ede1',
-      text2:'#b3a48f', text3:'#80715c', given:'#e8c79a', cellTop:'#211a14', cellBot:'#1a130f'
+      board:'#efe6d2',                     // cream paper (board background)
+      sheet:'#f6f0e1',                     // lighter printed sheet (pad face)
+      line:'#d4c8aa', lineBold:'#221f17',  // thin tan rule / bold ink box border
+      bg:'#efe6d2', oxblood:'#9b3a22', ochre:'#c8923a', olive:'#6f6a3b',
+      ink:'#221f17', given:'#4a3b2a',      // entered = ink, given clues = warm brown
+      text2:'#6c6450', text3:'#948b73'
     };
 
     // ---- deterministic randomness (seeded LCG; no Math.random / Date) ----
@@ -303,7 +306,7 @@
       // count a mistake when a non-zero entry disagrees with the unique solution
       if(v !== 0 && v !== solution[cursor]) mistakes++;
       updateConflicts();
-      if(v) burst(cursor, conflict[cursor] ? COL.red : COL.amber, 6);
+      if(v) burst(cursor, conflict[cursor] ? COL.oxblood : COL.olive, 5);
       updateHud();
       requestFrame();
       checkWin();
@@ -326,7 +329,6 @@
     // ---- win ----
     function win(){
       won = true;
-      for(let i = 0; i < N * N; i++) burst(i, (i % 2) ? COL.amber : COL.red, 5);
       const t = Math.floor(elapsed);
       let isBest = false;
       if(best === 0 || t < best){ best = t; localStorage.setItem(BEST_KEY, best); isBest = true; }
@@ -389,12 +391,10 @@
       const totalH = +canvas.height / dpr;
       ctx.clearRect(0, 0, size, totalH);
 
-      // board background
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, COL.boardTop); bg.addColorStop(1, COL.boardBot);
-      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
-      ctx.strokeStyle = COL.lineBold; ctx.lineWidth = 1;
-      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.045); ctx.stroke();
+      // board background — flat cream paper, bold ink border
+      ctx.fillStyle = COL.board; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+      ctx.strokeStyle = COL.lineBold; ctx.lineWidth = 1.5;
+      roundRect(0.75, 0.75, size - 1.5, size - 1.5, size * 0.045); ctx.stroke();
 
       drawCells();
       drawGrid();
@@ -402,8 +402,8 @@
       drawParticles();
 
       if(paused){
-        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, totalH, size * 0.045); ctx.fill();
-        ctx.fillStyle = COL.bone; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(239,230,210,.84)'; roundRect(0, 0, size, totalH, size * 0.045); ctx.fill();
+        ctx.fillStyle = COL.oxblood; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '400 ' + Math.floor(size * 0.11) + 'px ' + fontDisplay();
         ctx.fillText('PAUSED', size / 2, size / 2);
       }
@@ -420,27 +420,27 @@
         const sameLine = (r === cr || c === cc);
         const sameBox = (r >= cbr && r < cbr + BR && c >= cbc && c < cbc + BC);
 
-        // peer highlight wash
+        // peer highlight wash — faint warm tan
         if((sameLine || sameBox) && i !== cursor){
-          ctx.fillStyle = 'rgba(232,162,58,.07)';
+          ctx.fillStyle = 'rgba(74,59,42,.07)';
           ctx.fillRect(px, py, cell, cell);
         }
-        // same-value highlight
+        // same-value highlight — ochre tint
         if(cv && board[i] === cv && i !== cursor){
-          ctx.fillStyle = 'rgba(232,162,58,.16)';
+          ctx.fillStyle = 'rgba(200,146,58,.20)';
           ctx.fillRect(px, py, cell, cell);
         }
-        // conflict wash
+        // conflict wash — oxblood
         if(conflict[i]){
-          ctx.fillStyle = 'rgba(216,65,43,.26)';
+          ctx.fillStyle = 'rgba(155,58,34,.20)';
           ctx.fillRect(px, py, cell, cell);
         }
-        // selected cell
+        // selected cell — oxblood wash + ink frame
         if(i === cursor && !won){
-          const a = 0.30 + 0.12 * Math.sin(pulse);
-          ctx.fillStyle = 'rgba(216,65,43,' + a + ')';
+          const a = 0.16 + 0.07 * Math.sin(pulse);
+          ctx.fillStyle = 'rgba(155,58,34,' + a + ')';
           ctx.fillRect(px, py, cell, cell);
-          ctx.strokeStyle = COL.red; ctx.lineWidth = Math.max(2, cell * 0.045);
+          ctx.strokeStyle = COL.oxblood; ctx.lineWidth = Math.max(2, cell * 0.045);
           ctx.strokeRect(px + 1.5, py + 1.5, cell - 3, cell - 3);
         }
 
@@ -449,7 +449,7 @@
         if(v){
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.font = '400 ' + Math.floor(cell * 0.56) + 'px ' + fontDisplay();
-          ctx.fillStyle = conflict[i] ? COL.red : (given[i] ? COL.given : COL.bone);
+          ctx.fillStyle = conflict[i] ? COL.oxblood : (given[i] ? COL.given : COL.ink);
           ctx.fillText(String(v), px + cell / 2, py + cell / 2 + cell * 0.02);
         }
       }
@@ -482,11 +482,10 @@
       for(const b of rects){
         const isErase = b.val === 0;
         const sel = (!isErase && board[cursor] === b.val && !given[cursor]);
-        const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h);
-        grad.addColorStop(0, COL.cellTop); grad.addColorStop(1, COL.cellBot);
-        ctx.fillStyle = grad;
+        // flat printed key: oxblood face when selected, cream sheet otherwise
+        ctx.fillStyle = sel ? COL.oxblood : COL.sheet;
         roundRect(b.x, b.y, b.w, b.h, b.w * 0.18); ctx.fill();
-        ctx.strokeStyle = sel ? COL.amber : COL.lineBold; ctx.lineWidth = sel ? Math.max(2, b.w * 0.06) : 1.5;
+        ctx.strokeStyle = sel ? COL.oxblood : COL.lineBold; ctx.lineWidth = 1.5;
         roundRect(b.x + 0.75, b.y + 0.75, b.w - 1.5, b.h - 1.5, b.w * 0.18); ctx.stroke();
 
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -500,7 +499,7 @@
           ctx.stroke();
         } else {
           ctx.font = '400 ' + Math.floor(b.h * 0.52) + 'px ' + fontDisplay();
-          ctx.fillStyle = sel ? COL.amber : COL.bone;
+          ctx.fillStyle = sel ? COL.board : COL.ink;
           ctx.fillText(String(b.val), b.x + b.w / 2, b.y + b.h / 2 + b.h * 0.02);
         }
       }

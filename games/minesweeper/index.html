@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#efe6d2">
   <title>Minesweeper — Gamf</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../../gamf.css">
   <style>
-    body { --gx-accent: #6c8cff; }
+    body { --gx-accent: #9b3a22; }
     *{-webkit-user-select:none;user-select:none}
     html,body{height:100%;overflow:hidden;touch-action:none}
     .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
       padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
     canvas{border-radius:var(--r-lg);touch-action:none;
-      box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.04)}
+      box-shadow:0 8px 22px rgba(74,59,42,.22),inset 0 0 0 1px rgba(34,31,23,.10)}
     .bar{display:flex;align-items:center;gap:10px}
     .bar button{all:unset;display:inline-flex;align-items:center;gap:6px;cursor:pointer;min-height:44px;
       padding:0 16px;border-radius:var(--r-pill);font-family:var(--gx-font-display);font-weight:600;font-size:var(--fs-md);
       color:var(--gx-text);background:var(--gx-surface-2);border:1px solid var(--gx-line-2)}
-    .bar button.on{background:linear-gradient(135deg,var(--gx-warn),#ff7a6c);color:#0b0d14;border-color:transparent;font-weight:700}
+    .bar button.on{background:#9b3a22;color:#efe6d2;border-color:transparent;font-weight:700}
     .bar button:active{transform:translateY(1px)}
   </style>
 </head>
@@ -77,7 +77,7 @@
     const COLS=9, ROWS=9, MINES=10;
     const BEST_KEY='gamf-puzzle-minesweeper-best';
     const canvas=document.getElementById('c'), ctx=canvas.getContext('2d');
-    const NUMCOL=['','#6c8cff','#5ad1a8','#ff7a6c','#b06cff','#f2c14e','#5ad1e0','#e0e3ee','#9aa0b4'];
+    const NUMCOL=['','#6f6a3b','#4a3b2a','#a4623a','#221f17','#c8923a','#6f6a3b','#4a3b2a','#a4623a'];
     let cell=36, dpr=1;
     let grid, revealed, flagged, mineMap, started, gameOver, win, firstClick, time, timer=null, parts=[];
     let cursor={x:0,y:0}, flagMode=false, newBest=false, paused=false;
@@ -166,39 +166,36 @@
       document.getElementById('over').classList.add('gx-show'); }
 
     function burstMine(x,y){ for(let i=0;i<16;i++){ const a=rand()*Math.PI*2,s=1+rand()*4.5;
-      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#ff7a6c'}); } }
+      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#9b3a22'}); } }
     function burstWin(x,y){ for(let i=0;i<6;i++){ const a=rand()*Math.PI*2,s=1+rand()*3;
-      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#5ad1a8'}); } }
+      parts.push({x:x*cell+cell/2,y:y*cell+cell/2,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,c:'#6f6a3b'}); } }
 
     function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
       ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
     function draw(){ const W=COLS*cell, H=ROWS*cell;
-      const bg=ctx.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#161927'); bg.addColorStop(1,'#11131d');
-      ctx.fillStyle=bg; roundRect(0,0,W,H,14); ctx.fill();
+      ctx.fillStyle='#e4d8be'; roundRect(0,0,W,H,14); ctx.fill();
       for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){ const px=x*cell, py=y*cell, m=2;
         if(revealed[y][x]){
-          const op=ctx.createLinearGradient(px,py,px,py+cell); op.addColorStop(0,'#0f1119'); op.addColorStop(1,'#0c0e15');
-          ctx.fillStyle=op; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
-          if(mineMap[y][x]){ ctx.fillStyle='#ff7a6c'; ctx.shadowColor='#ff7a6c'; ctx.shadowBlur=12;
-            ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,cell*0.22,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0; }
-          else if(grid[y][x]>0){ ctx.fillStyle=NUMCOL[grid[y][x]]; ctx.shadowColor=NUMCOL[grid[y][x]]; ctx.shadowBlur=6;
+          ctx.fillStyle='#efe6d2'; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
+          if(mineMap[y][x]){ ctx.fillStyle='#9b3a22';
+            ctx.beginPath(); ctx.arc(px+cell/2,py+cell/2,cell*0.22,0,Math.PI*2); ctx.fill(); }
+          else if(grid[y][x]>0){ ctx.fillStyle=NUMCOL[grid[y][x]];
             ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='800 '+Math.floor(cell*0.5)+'px system-ui';
-            ctx.fillText(grid[y][x],px+cell/2,py+cell/2+1); ctx.shadowBlur=0; }
+            ctx.fillText(grid[y][x],px+cell/2,py+cell/2+1); }
         } else {
-          const cg=ctx.createLinearGradient(px,py,px,py+cell); cg.addColorStop(0,'#222840'); cg.addColorStop(1,'#1a1f33');
-          ctx.fillStyle=cg; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
-          ctx.fillStyle='rgba(255,255,255,.08)'; roundRect(px+m,py+m,cell-m*2,Math.max(3,cell*.2),4); ctx.fill();
+          ctx.fillStyle='#c8923a'; roundRect(px+m,py+m,cell-m*2,cell-m*2,5); ctx.fill();
+          ctx.fillStyle='rgba(255,255,255,.12)'; roundRect(px+m,py+m,cell-m*2,Math.max(3,cell*.2),4); ctx.fill();
           if(flagged[y][x]){ ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=Math.floor(cell*0.5)+'px system-ui';
             ctx.fillText('🚩',px+cell/2,py+cell/2+1); }
         }
       }
       if(!gameOver){ const px=cursor.x*cell, py=cursor.y*cell;
-        ctx.strokeStyle='#6c8cff'; ctx.lineWidth=2.5; ctx.shadowColor='#6c8cff'; ctx.shadowBlur=10;
-        roundRect(px+2,py+2,cell-4,cell-4,5); ctx.stroke(); ctx.shadowBlur=0; }
+        ctx.strokeStyle='#9b3a22'; ctx.lineWidth=2.5;
+        roundRect(px+2,py+2,cell-4,cell-4,5); ctx.stroke(); }
       for(const p of parts){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.c;
-        ctx.shadowColor=p.c; ctx.shadowBlur=8; ctx.fillRect(p.x-2,p.y-2,4,4); }
-      ctx.globalAlpha=1; ctx.shadowBlur=0; }
+        ctx.fillRect(p.x-2,p.y-2,4,4); }
+      ctx.globalAlpha=1; }
 
     function loop(){ let alive=false; for(const p of parts){ p.x+=p.vx; p.y+=p.vy; p.vy+=.12; p.life-=.04; if(p.life>0)alive=true; }
       parts=parts.filter(p=>p.life>0); draw(); if(alive) requestAnimationFrame(loop); }

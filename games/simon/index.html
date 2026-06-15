@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Simon — Gamf</title>
   <meta name="description" content="Watch the lights, then repeat the growing four-colour sequence. A touch-first arcade take on the classic memory game — how long is your chain?">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
     canvas { touch-action: none; display: block; border-radius: var(--r-5);
-      box-shadow: var(--sh-hero), inset 0 0 0 1px rgba(255,255,255,.03); }
+      box-shadow: var(--sh-hero), inset 0 0 0 1px rgba(34,31,23,.06); }
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-amber) 16%, var(--gx-screen)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -95,13 +95,14 @@
     function rand(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
     function randInt(n){ return Math.floor(rand() * n); }
 
-    // ---- pads: 4 quadrants. Arcade palette: red, amber, bone, deep ----
-    // Tuned hues so all four read clearly against the warm-black cabinet.
+    // ---- pads: 4 quadrants. Warm print palette: oxblood, ochre, olive, clay ----
+    // Matte printed-ink tones that read clearly on the cream catalogue plate.
+    // `lit` is a brighter wash of the same ink (no glow); `tint` colours feedback flecks.
     const PADS = [
-      { name: 'red',   base: '#7a2218', lit: '#ff5a3c', glow: '#ff7a52', freq: 415.30 }, // top-left
-      { name: 'amber', base: '#7a531a', lit: '#ffc24a', glow: '#ffd66e', freq: 311.13 }, // top-right
-      { name: 'teal',  base: '#16504a', lit: '#3fe0c2', glow: '#6cf0d8', freq: 261.63 }, // bottom-left
-      { name: 'bone',  base: '#6b5f4c', lit: '#f4ede1', glow: '#fff8ec', freq: 349.23 }, // bottom-right
+      { name: 'oxblood', base: '#9b3a22', lit: '#c8543a', tint: '#c8543a', freq: 415.30 }, // top-left (accent)
+      { name: 'ochre',   base: '#c8923a', lit: '#e0b261', tint: '#e0b261', freq: 311.13 }, // top-right
+      { name: 'olive',   base: '#6f6a3b', lit: '#9a945c', tint: '#9a945c', freq: 261.63 }, // bottom-left
+      { name: 'clay',    base: '#a4623a', lit: '#c4855c', tint: '#c4855c', freq: 349.23 }, // bottom-right
     ];
     // keyboard mapping: arrow/WASD -> pad index (TL, TR, BL, BR)
     // Up=TL? We instead map the 4 arrows to the 4 pads spatially via a helper.
@@ -274,7 +275,7 @@
       const mid = (s + e) / 2;
       const rr = (innerR() + R) / 2;
       const px = cx + Math.cos(mid) * rr, py = cy + Math.sin(mid) * rr;
-      const col = PADS[pad].glow;
+      const col = PADS[pad].tint;
       for(let k = 0; k < 10; k++){
         const a = mid + (rand() - 0.5) * 1.4;
         const sp = 1.2 + rand() * 2.8;
@@ -376,41 +377,15 @@
       const isCursor = (phase === 'input' && cursor === i);
       const pad = PADS[i];
 
-      // pulse factor for lit pads
-      let glow = 0;
-      if(isLit){
-        const remain = Math.max(0, activeUntil - now);
-        glow = Math.min(1, 0.35 + remain / 300);
-      }
-
       const a0 = s + 0.012, a1 = e - 0.012;
 
+      // flat matte ink fill: base when idle, brighter wash when lit (no glow)
       ctx.save();
       ctx.beginPath();
       ctx.arc(cx, cy, or, a0, a1, false);
       ctx.arc(cx, cy, ir, a1, a0, true);
       ctx.closePath();
-
-      if(isLit){
-        ctx.shadowColor = pad.glow;
-        ctx.shadowBlur = 28 * glow;
-      }
-      // radial-ish fill: blend base->lit by glow
-      const grad = ctx.createRadialGradient(cx, cy, ir, cx, cy, or);
-      const top = isLit ? pad.lit : pad.base;
-      grad.addColorStop(0, shade(top, isLit ? 1.04 : 0.9));
-      grad.addColorStop(1, shade(top, isLit ? 0.86 : 0.66));
-      ctx.fillStyle = grad;
-      ctx.fill();
-      ctx.restore();
-
-      // gloss sweep near the outer edge
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, or, a0, a1, false);
-      ctx.arc(cx, cy, or - (or - ir) * 0.34, a1, a0, true);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + glow * 0.14) + ')';
+      ctx.fillStyle = isLit ? pad.lit : pad.base;
       ctx.fill();
       ctx.restore();
 
@@ -419,31 +394,19 @@
         const mid = (s + e) / 2, rr = (ir + or) / 2;
         ctx.beginPath();
         ctx.arc(cx + Math.cos(mid) * rr, cy + Math.sin(mid) * rr, (or - ir) * 0.18, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(244,237,225,.9)';
+        ctx.strokeStyle = 'rgba(34,31,23,.85)';
         ctx.lineWidth = Math.max(2, size * 0.008);
         ctx.stroke();
       }
 
-      // thin separator stroke
+      // thin separator stroke (ink line)
       ctx.beginPath();
       ctx.arc(cx, cy, or, a0, a1, false);
       ctx.arc(cx, cy, ir, a1, a0, true);
       ctx.closePath();
-      ctx.strokeStyle = 'rgba(10,8,6,.65)';
+      ctx.strokeStyle = 'rgba(34,31,23,.5)';
       ctx.lineWidth = Math.max(1, size * 0.006);
       ctx.stroke();
-    }
-
-    // multiply a hex color by a factor (clamped)
-    function shade(hex, f){
-      const [r, g, b] = hexToRgb(hex);
-      const c = v => Math.max(0, Math.min(255, Math.round(v * f)));
-      return `rgb(${c(r)},${c(g)},${c(b)})`;
-    }
-    function hexToRgb(h){
-      if(h[0] === 'r'){ const m = h.match(/\d+/g); return [+m[0], +m[1], +m[2]]; }
-      h = h.replace('#', '');
-      return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
     }
 
     function render(now){
@@ -454,37 +417,33 @@
         ctx.translate((rand() - 0.5) * m, (rand() - 0.5) * m);
       }
 
-      // cabinet background plate
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#100c09');
-      ctx.fillStyle = bg;
+      // cabinet background plate — flat warm cream
+      ctx.fillStyle = '#efe6d2';
       roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = '#d8cbb0'; ctx.lineWidth = 1; ctx.stroke();
 
-      // outer ring of the disc
+      // outer ring of the disc — warm brown ink
       ctx.beginPath();
       ctx.arc(cx, cy, R + gap * 0.5, 0, Math.PI * 2);
-      ctx.fillStyle = '#0a0806'; ctx.fill();
+      ctx.fillStyle = '#4a3b2a'; ctx.fill();
 
       const t = now || performance.now();
       for(let i = 0; i < 4; i++) drawPad(i, t);
 
-      // center hub
+      // center hub — flat cream disc with ink rim
       ctx.beginPath();
       ctx.arc(cx, cy, innerR() - gap * 0.4, 0, Math.PI * 2);
-      const hub = ctx.createRadialGradient(cx, cy - innerR() * 0.3, innerR() * 0.1, cx, cy, innerR());
-      hub.addColorStop(0, '#241b14'); hub.addColorStop(1, '#120d09');
-      ctx.fillStyle = hub; ctx.fill();
-      ctx.strokeStyle = '#36281d'; ctx.lineWidth = Math.max(1, size * 0.006); ctx.stroke();
+      ctx.fillStyle = '#efe6d2'; ctx.fill();
+      ctx.strokeStyle = '#4a3b2a'; ctx.lineWidth = Math.max(1, size * 0.006); ctx.stroke();
 
       // hub label / status
-      ctx.fillStyle = '#f4ede1';
+      ctx.fillStyle = '#221f17';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const disp = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'Anton';
       const mono = getComputedStyle(document.body).getPropertyValue('--gx-font-mono') || 'monospace';
       ctx.font = '400 ' + Math.floor(innerR() * 0.62) + 'px ' + disp;
       ctx.fillText(String(round || 0), cx, cy - innerR() * 0.10);
-      ctx.fillStyle = '#b3a48f';
+      ctx.fillStyle = '#9b3a22';
       ctx.font = '700 ' + Math.floor(innerR() * 0.16) + 'px ' + mono;
       let label = 'ROUND';
       if(phase === 'showing') label = 'WATCH';
@@ -494,21 +453,21 @@
       else if(phase === 'idle') label = 'READY';
       ctx.fillText(label, cx, cy + innerR() * 0.34);
 
-      // particles
+      // particles — small flat ink flecks (no glow)
       for(const p of parts){
         ctx.globalAlpha = Math.max(0, p.life);
-        ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+        ctx.fillStyle = p.c;
         ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
       }
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
 
       ctx.restore();
 
-      // pause veil
+      // pause veil — warm cream wash, ink text
       if(phase === 'paused'){
-        ctx.fillStyle = 'rgba(10,8,6,.74)';
+        ctx.fillStyle = 'rgba(239,230,210,.82)';
         roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#221f17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         const disp = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'Anton';
         ctx.font = '400 ' + Math.floor(size * 0.1) + 'px ' + disp;
         ctx.fillText('PAUSED', size / 2, size / 2);

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Sokoban — Gamf</title>
-  <meta name="description" content="Push every box onto a glowing target tile. Cozy crate-pushing puzzles that grow level by level, with full undo and a touch d-pad.">
+  <meta name="description" content="Push every box onto its marked target tile. Cozy crate-pushing puzzles that grow level by level, with full undo and a touch d-pad.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
@@ -15,12 +15,12 @@
   </script>
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #e8a23a; }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: calc(env(safe-area-inset-top) + 56px) 14px calc(env(safe-area-inset-bottom) + 188px); }
     canvas { border-radius: var(--r-5); touch-action: none; display: block;
-      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.04); }
+      box-shadow: 0 10px 26px rgba(74,59,42,.22), inset 0 0 0 1px rgba(34,31,23,.08); }
 
     /* on-screen d-pad */
     .pad { position: fixed; left: 50%; transform: translateX(-50%);
@@ -98,7 +98,7 @@
   <div class="gx-modal" id="gxHelp">
     <div class="gx-modal__card">
       <div class="gx-modal__title">How to Play</div>
-      <p class="gx-help__obj">Push every crate onto a glowing target tile to clear the level.</p>
+      <p class="gx-help__obj">Push every crate onto a marked target tile to clear the level.</p>
       <ul class="gx-help__list">
         <li><b>Swipe / Arrows</b><span>Move &amp; push crates</span></li>
         <li><b>Tap tile</b><span>Step toward it</span></li>
@@ -388,7 +388,7 @@
           const a = (k / 10) * Math.PI * 2 + rand() * 0.6;
           const s = 1.4 + rand() * 2.8;
           parts.push({ x: cx, y: cy, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 1.5,
-                       life: 1, c: rand() > 0.5 ? '#e8a23a' : '#d8412b' });
+                       life: 1, c: rand() > 0.5 ? '#c8923a' : '#9b3a22' });
         }
       }
       let isBest = false;
@@ -447,7 +447,7 @@
     function render(){
       ctx.clearRect(0, 0, size, size);
       // outer screen backdrop
-      ctx.fillStyle = '#15110e';
+      ctx.fillStyle = '#efe6d2';
       roundRect(0, 0, size, size, size * 0.045); ctx.fill();
 
       const t = ease(anim.t);
@@ -495,8 +495,8 @@
 
       // pause veil
       if(paused){
-        ctx.fillStyle = 'rgba(10,8,6,.74)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
-        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(239,230,210,.82)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+        ctx.fillStyle = '#9b3a22'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '400 ' + Math.floor(size * 0.12) + "px 'Anton', sans-serif";
         ctx.fillText('PAUSED', size / 2, size / 2);
       }
@@ -504,65 +504,53 @@
 
     function drawFloor(x, y){
       const gx = Math.round((x - ox) / cell), gy = Math.round((y - oy) / cell);
-      ctx.fillStyle = ((gx + gy) & 1) ? '#221a13' : '#1d1610';
+      ctx.fillStyle = ((gx + gy) & 1) ? '#e7dcc4' : '#efe6d2';
       ctx.fillRect(x, y, cell, cell);
-      ctx.strokeStyle = '#2a2018'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(74,59,42,.18)'; ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
     }
     function drawWall(x, y){
       const p = cell * 0.04;
-      ctx.fillStyle = '#3a2c20';
+      ctx.fillStyle = '#4a3b2a';
       roundRect(x + p, y + p, cell - p*2, cell - p*2, cell * 0.12); ctx.fill();
-      ctx.fillStyle = '#2a2018';
+      ctx.fillStyle = '#3a2e20';
       roundRect(x + p, y + cell*0.46, cell - p*2, cell*0.5 - p, cell * 0.1); ctx.fill();
-      // top highlight
-      ctx.fillStyle = 'rgba(244,237,225,.06)';
-      roundRect(x + p, y + p, cell - p*2, cell*0.22, cell * 0.1); ctx.fill();
+      // brick seam (flat, printed)
+      ctx.strokeStyle = 'rgba(34,31,23,.35)'; ctx.lineWidth = Math.max(1, cell*0.03);
+      ctx.beginPath(); ctx.moveTo(x + p, y + cell*0.46); ctx.lineTo(x + cell - p, y + cell*0.46); ctx.stroke();
     }
     function drawTarget(x, y){
       const cx = x + cell/2, cy = y + cell/2, r = cell * 0.20;
       ctx.save();
-      ctx.strokeStyle = 'rgba(232,162,58,.85)'; ctx.lineWidth = Math.max(2, cell * 0.05);
+      ctx.strokeStyle = 'rgba(200,146,58,.9)'; ctx.lineWidth = Math.max(2, cell * 0.05);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
-      ctx.fillStyle = 'rgba(232,162,58,.18)';
+      ctx.fillStyle = 'rgba(200,146,58,.22)';
       ctx.beginPath(); ctx.arc(cx, cy, r * 0.55, 0, Math.PI*2); ctx.fill();
       ctx.restore();
     }
     function drawBox(x, y, onTarget){
       const m = cell * 0.12;
       const bx = x + m, by = y + m, bw = cell - m*2, bh = cell - m*2, r = cell * 0.14;
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = cell*0.12; ctx.shadowOffsetY = cell*0.05;
-      const grad = ctx.createLinearGradient(bx, by, bx, by + bh);
-      if(onTarget){ grad.addColorStop(0, '#f0b659'); grad.addColorStop(1, '#d8412b'); }
-      else        { grad.addColorStop(0, '#c98a4e'); grad.addColorStop(1, '#8a5a2e'); }
-      ctx.fillStyle = grad;
+      // flat matte crate (no glow, no gradient)
+      ctx.fillStyle = onTarget ? '#c8923a' : '#a4623a';
       roundRect(bx, by, bw, bh, r); ctx.fill();
-      ctx.restore();
-      // crate cross-bracing
-      ctx.strokeStyle = onTarget ? 'rgba(27,15,12,.55)' : 'rgba(40,26,16,.7)';
+      // crate cross-bracing + frame, printed ink
+      ctx.strokeStyle = onTarget ? 'rgba(34,31,23,.5)' : 'rgba(34,31,23,.55)';
       ctx.lineWidth = Math.max(1.5, cell * 0.035);
       ctx.beginPath();
       ctx.moveTo(bx, by); ctx.lineTo(bx + bw, by + bh);
       ctx.moveTo(bx + bw, by); ctx.lineTo(bx, by + bh);
       ctx.stroke();
       roundRect(bx, by, bw, bh, r); ctx.stroke();
-      // gloss
-      ctx.fillStyle = 'rgba(244,237,225,.16)';
-      roundRect(bx + bw*0.14, by + bh*0.12, bw*0.72, bh*0.18, r*0.6); ctx.fill();
     }
     function drawPlayer(x, y){
       const cx = x + cell/2, cy = y + cell/2;
       const r = cell * 0.30;
-      ctx.save();
-      ctx.shadowColor = 'rgba(216,65,43,.5)'; ctx.shadowBlur = cell*0.18;
-      const grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.4, r*0.2, cx, cy, r);
-      grad.addColorStop(0, '#f4ede1'); grad.addColorStop(1, '#d8412b');
-      ctx.fillStyle = grad;
+      // flat oxblood disc (single accent, no glow)
+      ctx.fillStyle = '#9b3a22';
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
-      ctx.restore();
-      // eyes
-      ctx.fillStyle = '#1b0f0c';
+      // cream eyes (printed)
+      ctx.fillStyle = '#efe6d2';
       ctx.beginPath(); ctx.arc(cx - r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(cx + r*0.34, cy - r*0.1, r*0.16, 0, Math.PI*2); ctx.fill();
     }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Pipes — Gamf</title>
   <meta name="description" content="Rotate the pipe tiles to channel the flow from the source to the drain. Tap a tile to turn it 90°, connect them all, and let it pour. A touch-first retro-arcade plumbing puzzle.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,12 +18,12 @@
 
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #6c8cff; }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
     canvas { border-radius: var(--r-5); touch-action: none; display: block;
-      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.03); }
+      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(34,31,23,.06); }
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-amber) 16%, var(--gx-screen)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -90,22 +90,22 @@
     // ============================================================ config
     const BEST_KEY = 'gamf-puzzle-pipes-best';     // highest score (higher = better)
 
-    // arcade palette
+    // warm 1970s print-catalogue palette (matte ink, no glow)
     const COL = {
-      bg:    '#15110e',
-      screen:'#100c09',
-      panel: '#1b1410',
-      line:  '#36281d',
-      line2: '#4a3826',
-      ink:   '#0a0806',
-      text:  '#f4ede1',
-      text3: '#80715c',
-      red:   '#d8412b',
-      amber: '#e8a23a',
-      pipeOff:'#5a4c3c',     // unfilled pipe metal
-      pipeOffHi:'#736150',
-      water: '#6c8cff',      // flow accent (matches card color)
-      waterHi:'#a9bcff',
+      bg:    '#efe6d2',      // cream page
+      screen:'#f3ece0',      // lighter cream toward top
+      panel: '#e6dabf',      // tile base (warm paper)
+      line:  '#cdbb98',      // hairline
+      line2: '#b9a784',      // board border
+      ink:   '#221f17',      // matte ink
+      text:  '#221f17',
+      text3: '#6f6a3b',
+      red:   '#9b3a22',      // oxblood (drain when empty)
+      amber: '#c8923a',      // ochre (source)
+      pipeOff:'#a89373',     // unfilled pipe (warm brown-grey)
+      pipeOffHi:'#c4b291',
+      water: '#9b3a22',      // flow accent = oxblood (the one accent)
+      waterHi:'#c05a3a',     // warm clay highlight on flow
     };
 
     const canvas = document.getElementById('c');
@@ -448,8 +448,8 @@
       const m = cell * 0.06;
       const x = px + m, y = py + m, w = cell - m * 2, r = cell * 0.16;
 
-      // socket / tile base
-      ctx.fillStyle = t.filled ? '#1d1a22' : COL.panel;
+      // socket / tile base (warm tint when carrying flow)
+      ctx.fillStyle = t.filled ? '#e3cdb6' : COL.panel;
       roundRect(x, y, w, w, r); ctx.fill();
       ctx.strokeStyle = COL.line;
       ctx.lineWidth = Math.max(1, cell * 0.012);
@@ -514,7 +514,7 @@
 
       // keyboard cursor
       if(i === cursor && !won){
-        ctx.strokeStyle = 'rgba(244,237,225,.85)';
+        ctx.strokeStyle = 'rgba(34,31,23,.6)';
         ctx.lineWidth = Math.max(2, cell * 0.035);
         roundRect(x + 2, y + 2, w - 4, w - 4, r * 0.8); ctx.stroke();
       }
@@ -540,16 +540,16 @@
       }
       ctx.globalAlpha = 1;
 
-      // win banner sweep
+      // win banner sweep (warm oxblood wash)
       if(won && flowAnim < 1){
-        ctx.fillStyle = 'rgba(108,140,255,' + (0.18 * (1 - flowAnim)) + ')';
+        ctx.fillStyle = 'rgba(155,58,34,' + (0.14 * (1 - flowAnim)) + ')';
         roundRect(0, 0, size, size, size * 0.045); ctx.fill();
       }
 
-      // pause veil
+      // pause veil (warm dusk, ink text)
       if(paused){
-        ctx.fillStyle = 'rgba(10,8,6,.72)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
-        ctx.fillStyle = COL.text; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(42,33,24,.74)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
+        ctx.fillStyle = COL.bg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '400 ' + Math.floor(size * 0.11) + 'px Anton, system-ui, sans-serif';
         ctx.fillText('PAUSED', size / 2, size / 2);
       }

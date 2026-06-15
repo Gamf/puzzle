@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#efe6d2">
   <title>Lights Out — Gamf</title>
   <meta name="description" content="Switch off every light. Tapping a cell flips it and its neighbours — a glowing, touch-first take on the classic Lights Out puzzle.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,12 +12,12 @@
   <link rel="stylesheet" href="../../gamf.css">
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #ffcd4d; }
+    body { --gx-accent: #9b3a22; background: #efe6d2; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
     canvas { border-radius: var(--r-lg); touch-action: none; display: block;
-      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.04); }
+      box-shadow: 0 10px 28px rgba(74,59,42,.22), inset 0 0 0 1px rgba(34,31,23,.10); }
     .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
       background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-surface-2)); }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
@@ -225,7 +225,7 @@
     function burst(i, lit){
       const [px, py] = cellXY(i);
       const cx = px + cell / 2, cy = py + cell / 2;
-      const col = lit ? '#ffe08a' : '#46d6a4';
+      const col = lit ? '#c8923a' : '#6f6a3b';
       const count = 9;
       for(let k = 0; k < count; k++){
         const a = (k / count) * Math.PI * 2 + rand() * 0.6;
@@ -320,45 +320,42 @@
       const sc = 1 - flip * 0.12;              // squash pulse on change
       const cw = w * sc, ch = h * sc, cx = x + (w - cw) / 2, cy = y + (h - ch) / 2;
 
-      // base socket
-      ctx.fillStyle = '#0e1019';
+      // base socket (warm shadowed inset behind the tile)
+      ctx.fillStyle = '#3a2e1f';
       roundRect(x - 1, y - 1, w + 2, h + 2, r + 1); ctx.fill();
 
-      // body gradient: dark when off, warm/glowing when on
+      // body fill: muted clay when off, oxblood accent when lit — matte printed ink
+      const offTop = '#cdbf9f', offBot = '#bdae8c';
+      const onTop = '#b5482b', onBot = '#9b3a22';
       const grad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
-      const onTop = `rgba(${255},${214 + 0},${90},1)`;
-      const offTop = '#1b2030', offBot = '#12151f';
       grad.addColorStop(0, lerpHex(offTop, onTop, g));
-      grad.addColorStop(1, lerpHex(offBot, '#e0982b', g));
-      ctx.save();
-      if(g > 0.02){ ctx.shadowColor = 'rgba(255,205,77,' + (0.55 * g) + ')'; ctx.shadowBlur = 18 * g; }
+      grad.addColorStop(1, lerpHex(offBot, onBot, g));
       ctx.fillStyle = grad;
       roundRect(cx, cy, cw, ch, r); ctx.fill();
-      ctx.restore();
 
-      // inner gloss highlight
-      ctx.fillStyle = 'rgba(255,255,255,' + (0.10 + 0.16 * g) + ')';
-      roundRect(cx + cw * 0.12, cy + ch * 0.10, cw * 0.76, ch * 0.30, r * 0.7); ctx.fill();
+      // flat printed top edge (subtle, no gloss/glow)
+      ctx.fillStyle = 'rgba(255,248,232,' + (0.12 + 0.05 * g) + ')';
+      roundRect(cx + cw * 0.12, cy + ch * 0.10, cw * 0.76, ch * 0.22, r * 0.7); ctx.fill();
 
-      // lit core ring
+      // lit inner mark (flat ochre register, no glow)
       if(g > 0.5){
-        ctx.strokeStyle = 'rgba(255,255,255,' + (0.25 * (g - 0.5) * 2) + ')';
+        ctx.strokeStyle = 'rgba(245,232,205,' + (0.32 * (g - 0.5) * 2) + ')';
         ctx.lineWidth = Math.max(1, cell * 0.02);
         roundRect(cx + cw * 0.22, cy + ch * 0.22, cw * 0.56, ch * 0.56, r * 0.6); ctx.stroke();
       }
 
-      // hint marker
+      // hint marker (oxblood dashed register)
       if(i === hintIdx){
-        ctx.strokeStyle = '#36e0c2';
+        ctx.strokeStyle = '#9b3a22';
         ctx.lineWidth = Math.max(2, cell * 0.04);
         ctx.setLineDash([cell * 0.12, cell * 0.08]);
         roundRect(cx - 2, cy - 2, cw + 4, ch + 4, r + 2); ctx.stroke();
         ctx.setLineDash([]);
       }
 
-      // keyboard cursor
+      // keyboard cursor (warm ink ring)
       if(i === cursor){
-        ctx.strokeStyle = 'rgba(255,255,255,.85)';
+        ctx.strokeStyle = 'rgba(34,31,23,.55)';
         ctx.lineWidth = Math.max(2, cell * 0.035);
         roundRect(cx + 3, cy + 3, cw - 6, ch - 6, r * 0.7); ctx.stroke();
       }
@@ -380,25 +377,23 @@
     function render(){
       // clear every frame (in CSS px; transform already scales to device px)
       ctx.clearRect(0, 0, size, size);
-      // board background
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, '#161a26'); bg.addColorStop(1, '#0e1018');
-      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+      // board background — flat warm cream panel
+      ctx.fillStyle = '#e6dabf'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
 
       for(let i = 0; i < N * N; i++) drawCell(i);
 
-      // particles
+      // particles (flat printed flecks, no glow)
       for(const p of parts){
         ctx.globalAlpha = Math.max(0, p.life);
-        ctx.fillStyle = p.c; ctx.shadowColor = p.c; ctx.shadowBlur = 8;
+        ctx.fillStyle = p.c;
         ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
       }
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
 
-      // pause veil
+      // pause veil (warm cream wash, ink text)
       if(paused){
-        ctx.fillStyle = 'rgba(7,8,12,.7)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-        ctx.fillStyle = '#eef1f7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(239,230,210,.82)'; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
+        ctx.fillStyle = '#221f17'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = '700 ' + Math.floor(size * 0.1) + 'px ' + getComputedStyle(document.body).getPropertyValue('--gx-font-display');
         ctx.fillText('Paused', size / 2, size / 2);
       }

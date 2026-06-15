@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#15110e">
+  <meta name="theme-color" content="#efe6d2">
   <title>Flood It — Gamf</title>
   <meta name="description" content="Flood the whole board to a single color in the fewest moves. Pick a color, watch it spread from the corner — a touch-first take on the classic Flood It puzzle.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,29 +12,28 @@
   <link rel="stylesheet" href="../../gamf.css">
   <style>
     /* genre accent for this game */
-    body { --gx-accent: var(--gx-red); }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: calc(env(safe-area-inset-top) + 56px) 14px calc(env(safe-area-inset-bottom) + 150px); }
     .wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-    canvas { border-radius: var(--r-5); touch-action: none; display: block;
-      box-shadow: 6px 6px 0 var(--gx-ink), inset 0 0 0 1px rgba(255,255,255,.04); }
+    canvas { border-radius: var(--r); touch-action: none; display: block;
+      box-shadow: 0 1px 2px rgba(40,28,10,.07), 0 10px 28px rgba(60,42,16,.10); }
 
     /* color picker row */
     .palette { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; pointer-events: auto; }
-    .swatch { position: relative; width: 46px; height: 46px; border-radius: var(--r-4);
-      border: 2px solid var(--gx-line-2); cursor: pointer; padding: 0; outline: none;
-      box-shadow: 3px 3px 0 var(--gx-ink); transition: transform .1s ease, box-shadow .1s ease, border-color .1s ease; }
-    .swatch:hover { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--gx-ink); }
-    .swatch:active { transform: translate(2px,2px); box-shadow: 1px 1px 0 var(--gx-ink); }
-    .swatch.is-cursor { border-color: var(--gx-text); }
-    .swatch.is-cursor::after { content: ""; position: absolute; inset: 4px; border-radius: var(--r-3);
-      border: 2px solid rgba(255,255,255,.55); }
+    .swatch { position: relative; width: 46px; height: 46px; border-radius: var(--r);
+      border: 1.5px solid var(--ink); cursor: pointer; padding: 0; outline: none;
+      box-shadow: var(--shadow); transition: transform .1s ease, box-shadow .1s ease, border-color .1s ease; }
+    .swatch:hover { transform: translate(-1px,-1px); }
+    .swatch:active { transform: translate(1px,1px); }
+    .swatch.is-cursor { border-color: var(--accent); }
+    .swatch.is-cursor::after { content: ""; position: absolute; inset: 4px; border-radius: var(--r);
+      border: 2px solid rgba(34,31,23,.55); }
     .swatch__k { position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%);
-      font-family: var(--gx-font-mono); font-size: 10px; font-weight: 700; color: rgba(0,0,0,.6); pointer-events: none; }
+      font-family: var(--body); font-size: 11px; font-weight: 600; color: rgba(34,31,23,.7); pointer-events: none; }
 
-    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
-      background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-screen)); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
   </style>
 </head>
@@ -50,7 +49,7 @@
   <header class="gx-hud">
     <a class="gx-hud__back" href="../../"><svg class="gx-ico"><use href="#i-back"/></svg> Puzzle</a>
     <span class="gx-hud__spacer"></span>
-    <span class="gx-pill">Moves <b id="moves">0</b><span id="movesCap" style="color:var(--gx-text-3)">/25</span></span>
+    <span class="gx-pill">Moves <b id="moves">0</b><span id="movesCap" style="color:var(--ink-3)">/25</span></span>
     <span class="gx-pill gx-pill--best"><svg class="gx-ico" style="width:1em;height:1em"><use href="#i-trophy"/></svg> Best <b id="best">—</b></span>
     <button class="gx-help__open" id="gxHelpOpen" aria-label="How to play"><svg class="gx-ico"><use href="#i-info"/></svg></button>
   </header>
@@ -110,15 +109,15 @@
     const NCOLORS = 6;                           // number of colors in the palette
     const MOVE_CAP = 30;                         // generous move budget; fail if exceeded without filling
 
-    // Arcade-tinted palette: red + amber accents over warm neutrals, plus a few
-    // distinct hues that still read on the warm-black canvas.
+    // Matte printed-ink earth palette: six flat swatches that read distinctly on
+    // the cream board. Oxblood is the single apex accent.
     const COLORS = [
-      '#d8412b', // red
-      '#e8a23a', // amber
-      '#4fb286', // green
-      '#3d8bd8', // blue
-      '#9a6cc4', // violet
-      '#f4ede1', // bone
+      '#9b3a22', // oxblood — the accent
+      '#c8923a', // ochre
+      '#6f6a3b', // olive
+      '#a4623a', // clay
+      '#4a3b2a', // warm brown
+      '#d9bd86', // pale ochre
     ];
 
     const canvas = document.getElementById('c');
@@ -388,21 +387,19 @@
       const tprog = c.p < 1 ? c.p : 1;
       const fill = (c.c === c.t) ? to : lerpRgb(from, to, tprog);
 
-      // body
+      // body — flat matte printed ink, no gloss
       ctx.fillStyle = fill;
       roundRect(x, y, w, h, r); ctx.fill();
 
-      // subtle top gloss + bottom shade for depth
-      ctx.fillStyle = 'rgba(255,255,255,.12)';
-      roundRect(x + w*0.10, y + h*0.08, w*0.80, h*0.30, r*0.7); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,.16)';
-      roundRect(x, y + h*0.62, w, h*0.38, r); ctx.fill();
+      // thin warm-ink edge so adjacent swatches read as printed tiles
+      ctx.strokeStyle = 'rgba(34,31,23,.18)';
+      ctx.lineWidth = 1;
+      roundRect(x + 0.5, y + 0.5, w - 1, h - 1, r); ctx.stroke();
 
-      // pulse highlight on the cells still resolving the wave
+      // brief ink-darken on cells still resolving the wave (no glow)
       if(c.p < 1 && c.p > 0.02 && c.hold >= c.dist * 0.045){
-        ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 * (1 - c.p)) + ')';
-        ctx.lineWidth = Math.max(1, cell * 0.06);
-        roundRect(x, y, w, h, r); ctx.stroke();
+        ctx.fillStyle = 'rgba(34,31,23,' + (0.22 * (1 - c.p)) + ')';
+        roundRect(x, y, w, h, r); ctx.fill();
       }
     }
 
@@ -410,23 +407,20 @@
       if(!cells) return;                       // guard: nothing to draw before the first board exists
       // clear the full canvas each frame so the rounded-panel corners never ghost
       ctx.clearRect(0, 0, size, size);
-      // board background panel
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, '#1b1410'); bg.addColorStop(1, '#100c09');
-      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
-      ctx.strokeStyle = '#36281d'; ctx.lineWidth = 1;
-      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.045); ctx.stroke();
+      // board background — flat warm sheet (the printed board)
+      ctx.fillStyle = '#e2d6b8'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
+      ctx.strokeStyle = '#d4c8aa'; ctx.lineWidth = 1;
+      roundRect(0.5, 0.5, size - 1, size - 1, size * 0.03); ctx.stroke();
 
       for(let i = 0; i < N * N; i++) drawCell(i);
 
-      // origin marker — the corner the flood spreads from
+      // origin marker — the corner the flood spreads from (printed ink ring)
       const [ox, oy] = cellXY(0);
       ctx.save();
-      ctx.globalAlpha = 0.85;
-      ctx.fillStyle = 'rgba(244,237,225,.9)';
       const dot = Math.max(3, cell * 0.16);
+      ctx.fillStyle = 'rgba(243,236,224,.92)';
       ctx.beginPath(); ctx.arc(ox + cell/2, oy + cell/2, dot, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillStyle = 'rgba(34,31,23,.7)';
       ctx.beginPath(); ctx.arc(ox + cell/2, oy + cell/2, dot * 0.45, 0, Math.PI*2); ctx.fill();
       ctx.restore();
 
@@ -440,10 +434,10 @@
 
       // pause veil
       if(paused){
-        ctx.fillStyle = 'rgba(10,8,6,.78)'; roundRect(0, 0, size, size, size * 0.045); ctx.fill();
-        ctx.fillStyle = '#f4ede1'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const fam = getComputedStyle(document.body).getPropertyValue('--gx-font-display') || 'sans-serif';
-        ctx.font = '400 ' + Math.floor(size * 0.12) + 'px ' + fam;
+        ctx.fillStyle = 'rgba(239,230,210,.82)'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
+        ctx.fillStyle = '#9b3a22'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const fam = getComputedStyle(document.body).getPropertyValue('--display') || 'serif';
+        ctx.font = '600 ' + Math.floor(size * 0.12) + 'px ' + fam;
         ctx.fillText('PAUSED', size / 2, size / 2);
       }
     }

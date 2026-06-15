@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#07080c">
+  <meta name="theme-color" content="#efe6d2">
   <title>2048 — Gamf</title>
   <meta name="description" content="A polished, touch-first 2048 with smooth tile animations and merge particles.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,15 +12,14 @@
   <link rel="stylesheet" href="../../gamf.css">
   <style>
     /* genre accent for this game */
-    body { --gx-accent: #6c8cff; }
+    body { --gx-accent: #9b3a22; }
     html, body { height: 100%; overflow: hidden; touch-action: none; }
     .stage { position: fixed; inset: 0; display: grid; place-items: center;
       padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom); }
-    canvas { border-radius: var(--r-lg); touch-action: none; display: block;
-      box-shadow: 0 18px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.04); }
+    canvas { border-radius: var(--r); touch-action: none; display: block;
+      box-shadow: 0 1px 2px rgba(40,28,10,.07), 0 10px 28px rgba(60,42,16,.10); }
     /* keep the New-game control reachable as a hint chip button */
-    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; color: var(--gx-text);
-      background: color-mix(in srgb, var(--gx-accent) 22%, var(--gx-surface-2)); }
+    .gx-hint__chip.as-btn { cursor: pointer; pointer-events: auto; }
     .gx-hint__chip.as-btn:active { transform: translateY(1px); }
   </style>
 </head>
@@ -126,14 +125,27 @@
 
     function cellXY(x, y){ return [gap + x * (cell + gap), gap + y * (cell + gap)]; }
 
-    // ---- tile colours: warm low → cool/bright high ----
+    // ---- tile colours: matte printed-ink earth tones, oxblood as the apex accent ----
+    // Each entry is a flat printed swatch; the 2048 win tile is the single oxblood accent.
+    const TILE_COLOURS = {
+      2:    '#efe7d3',  // pale sheet
+      4:    '#e6d9b8',  // light ochre
+      8:    '#d9bd86',  // ochre
+      16:   '#c8923a',  // ochre deep
+      32:   '#b9803a',  // clay light
+      64:   '#a4623a',  // clay
+      128:  '#8c5a30',  // warm brown light
+      256:  '#6f6a3b',  // olive
+      512:  '#5d5a33',  // olive deep
+      1024: '#4a3b2a',  // warm brown
+      2048: '#9b3a22'   // oxblood — the apex accent
+    };
     function tint(v){
-      if(!v) return ['#222840', '#1b2036'];
-      const t = Math.min(Math.log2(v) / 11, 1);
-      const h = 26 + t * 210;
-      return [`hsl(${h},72%,${42 + t * 14}%)`, `hsl(${h},72%,${27 + t * 10}%)`];
+      if(!v) return '#e7dcc2';                       // empty cell ink-wash
+      return TILE_COLOURS[v] || '#9b3a22';           // beyond 2048 stays oxblood
     }
-    function txtColor(v){ return v <= 4 ? '#cdd3e6' : '#0b0d14'; }
+    // Dark ink on pale tiles, cream ink on dark tiles.
+    function txtColor(v){ return (v && v <= 8) ? '#221f17' : '#f3ece0'; }
 
     // ---- helpers ----
     function emptyGrid(){ return Array.from({length:N}, () => Array(N).fill(0)); }
@@ -242,7 +254,7 @@
           gainedScore += mg.value;
           const [tx,ty] = coords[mg.to];
           anims.push(mergeAnim(tx, ty, mg.into));
-          burst(tx, ty, tint(mg.value)[0]);
+          burst(tx, ty, tint(mg.value));
         }
       }
 
@@ -336,17 +348,12 @@
     function drawTile(px, py, v, scale){
       const s = scale == null ? 1 : scale;
       const w = cell * s, h = cell * s, ox = px + (cell - w)/2, oy = py + (cell - h)/2;
-      const [c1, c2] = tint(v);
-      const g = ctx.createLinearGradient(ox, oy, ox, oy + h);
-      g.addColorStop(0, c1); g.addColorStop(1, c2);
-      ctx.shadowColor = c1; ctx.shadowBlur = v >= 128 ? 16 : 7;
-      ctx.fillStyle = g; roundRect(ox, oy, w, h, cell * 0.13); ctx.fill(); ctx.shadowBlur = 0;
-      // gloss
-      ctx.fillStyle = 'rgba(255,255,255,.14)'; roundRect(ox, oy, w, h * 0.32, cell * 0.13); ctx.fill();
+      // flat matte ink swatch — no glow, no gloss, no gradient
+      ctx.fillStyle = tint(v); roundRect(ox, oy, w, h, cell * 0.08); ctx.fill();
       // number
       ctx.fillStyle = txtColor(v); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const fs = (v < 100 ? cell * 0.42 : v < 1000 ? cell * 0.34 : cell * 0.26) * s;
-      ctx.font = '700 ' + fs + 'px ' + getComputedStyle(document.body).getPropertyValue('--gx-font-display');
+      ctx.font = '700 ' + fs + 'px ' + getComputedStyle(document.body).getPropertyValue('--display');
       ctx.fillText(String(v), ox + w/2, oy + h/2 + 1);
     }
 
@@ -354,15 +361,13 @@
       // clear every frame so sliding tiles / particles never ghost in the
       // rounded board corners (which the board background does not cover)
       ctx.clearRect(0, 0, size, size);
-      // board background
-      const bg = ctx.createLinearGradient(0, 0, 0, size);
-      bg.addColorStop(0, '#161a26'); bg.addColorStop(1, '#11141e');
-      ctx.fillStyle = bg; roundRect(0, 0, size, size, size * 0.05); ctx.fill();
-      // empty cells
+      // board background — flat warm sheet (the printed board)
+      ctx.fillStyle = '#e2d6b8'; roundRect(0, 0, size, size, size * 0.03); ctx.fill();
+      // empty cells — slightly recessed warm wash
       for(let y=0;y<N;y++) for(let x=0;x<N;x++){
         const [px, py] = cellXY(x, y);
-        ctx.fillStyle = 'rgba(255,255,255,.035)';
-        roundRect(px, py, cell, cell, cell * 0.13); ctx.fill();
+        ctx.fillStyle = tint(0);
+        roundRect(px, py, cell, cell, cell * 0.08); ctx.fill();
       }
 
       const et = easeOut(t);
@@ -399,18 +404,18 @@
         }
       }
 
-      // particles
+      // particles — small flat ink flecks on merge, no glow
       for(const p of parts){
         ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c;
-        ctx.shadowColor = p.c; ctx.shadowBlur = 8; ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+        ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
       }
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
 
-      // pause veil
+      // pause veil — warm cream wash, ink text
       if(paused){
-        ctx.fillStyle = 'rgba(7,8,12,.66)'; roundRect(0,0,size,size,size*0.05); ctx.fill();
-        ctx.fillStyle = '#eef1f7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = '700 ' + Math.floor(size*0.1) + 'px ' + getComputedStyle(document.body).getPropertyValue('--gx-font-display');
+        ctx.fillStyle = 'rgba(239,230,210,.78)'; roundRect(0,0,size,size,size*0.03); ctx.fill();
+        ctx.fillStyle = '#9b3a22'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '700 ' + Math.floor(size*0.1) + 'px ' + getComputedStyle(document.body).getPropertyValue('--display');
         ctx.fillText('Paused', size/2, size/2);
       }
     }
